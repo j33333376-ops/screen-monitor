@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>학생 화면 모니터</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="login" class="center">
+  <div class="card">
+    <h1>학생 화면 모니터</h1>
+    <p class="muted">교사용 · 시제품</p>
+    <input id="password" type="password" aria-label="교사 비밀번호" placeholder="교사 비밀번호" autocomplete="current-password">
+    <label class="quality-choice" for="initialLessonTitle">수업명 · 키워드 (선택)</label>
+    <input id="initialLessonTitle" class="lesson-input" type="text" maxlength="40" placeholder="예: 분수의 나눗셈" aria-describedby="initialLessonHint">
+    <p id="initialLessonHint" class="lesson-hint">PDF 이름 맨 앞에 넣습니다. 학년·반은 학생 정보에서 자동으로 가져옵니다.</p>
+    <label class="quality-choice" for="initialQuality">캡처 저장 화질</label>
+    <select id="initialQuality">
+      <option value="standard">기본 · 현재 화질</option>
+      <option value="ai">AI 분석용 · 고화질 (최대 2560px)</option>
+    </select>
+    <label class="quality-choice" for="initialInterval">캡처 주기</label>
+    <select id="initialInterval">
+      <option value="10">10초마다</option>
+      <option value="20">20초마다</option>
+      <option value="30" selected>30초마다 · 기본</option>
+    </select>
+    <button id="createBtn">수업 시작</button>
+    <p id="loginMsg" class="err" role="status"></p>
+    <a class="install-link" href="/student" target="_blank" rel="noopener">학생 앱 설치 안내</a>
+  </div>
+</div>
+
+<div id="main" class="hidden">
+  <header class="toolbar" aria-label="수업 도구">
+    <button id="connectionBtn" class="ghost code" title="누르면 IP 주소와 수업 코드를 별도 창에 표시합니다.">수업 코드 <b id="code">------</b> ↗</button>
+    <div class="stat"><span id="onlineCount">0</span>명 접속</div>
+    <span id="connectionStatus" role="status">연결 중…</span>
+    <button id="saveBtn" class="save-btn hidden" title=""></button>
+    <div class="spacer"></div>
+    <button id="helpBtn" class="ghost" aria-expanded="false" aria-controls="helpPanel" title="호출한 학생 목록 열기">✋ 호출 <span id="helpCount" role="status" aria-live="polite">0</span></button>
+    <button id="settingsBtn" class="ghost" title="수업명, 저장 설정, 메시지, 화면 크기" aria-haspopup="dialog">수업 설정</button>
+    <button id="endBtn" class="danger">수업 종료</button>
+  </header>
+  <section id="helpPanel" class="floating-panel hidden" aria-label="학생 호출">
+    <div class="panel-heading"><h2>학생 호출</h2><button id="helpClose" class="secondary" aria-label="학생 호출 목록 닫기">닫기</button></div>
+    <div id="helpBar" class="help-bar"></div>
+  </section>
+  <div id="grid"></div>
+  <p id="emptyHint" class="hint">학생이 접속하면 여기에 화면이 나타납니다. 학생 프로그램에 위 <b>수업 코드</b>를 입력하게 하세요.</p>
+</div>
+
+<dialog id="settingsDialog" aria-labelledby="settingsTitle">
+  <div class="panel-heading"><h2 id="settingsTitle">수업 설정</h2><button id="settingsClose" class="secondary">닫기</button></div>
+  <div class="lesson-bar">
+    <label for="lessonTitle">수업명 · 키워드 (선택)</label>
+    <input id="lessonTitle" class="lesson-input" type="text" maxlength="40" placeholder="예: 분수의 나눗셈" aria-describedby="lessonTitleStatus">
+    <button id="lessonTitleBtn" class="ghost">수업명 적용</button>
+    <span id="lessonTitleStatus" role="status">PDF 이름: 수업명_학년·반_날짜_학생 정보</span>
+  </div>
+  <div class="setting-fields">
+    <label class="quality-choice" for="saveQuality">저장 화질
+      <select id="saveQuality" title="화질을 바꾸려면 저장을 중지한 뒤 선택하세요.">
+        <option value="standard">기본</option>
+        <option value="ai">AI 분석용 고화질</option>
+      </select>
+    </label>
+    <label class="quality-choice" for="saveInterval">캡처 주기
+      <select id="saveInterval" title="주기를 바꾸려면 저장을 중지한 뒤 선택하세요."></select>
+    </label>
+    <label class="size">칸 크기
+      <input id="sizeRange" type="range" min="160" max="420" value="260">
+    </label>
+  </div>
+  <p id="saveNotice" role="status"></p>
+  <p id="qualityNotice" role="status"></p>
+  <p id="saveWarning" role="status"></p>
+  <div class="settings-actions">
+    <button id="msgBtn" class="ghost" title="학생 앱에 짧은 안내 문구를 보냅니다.">💬 전체 메시지</button>
+    <a class="install-link" href="/student" target="_blank" rel="noopener">학생 앱 설치</a>
+  </div>
+</dialog>
+
+<div id="modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-bar">
+    <span id="modalTitle"></span>
+    <button id="modalHelp" class="hand-btn hidden">✋ 손 내리기</button>
+    <button id="modalMsg">💬 이 학생에게 메시지</button>
+    <button id="modalClose">닫기 ✕</button>
+  </div>
+  <div class="history-bar">
+    <div class="history-buttons">
+      <button id="historyPrev" disabled>◀ 이전</button>
+      <button id="historyNext" disabled>다음 ▶</button>
+      <button id="historyLive" disabled>실시간으로</button>
+    </div>
+    <span id="historyStatus" role="status" aria-live="polite"></span>
+  </div>
+  <img id="modalImg" alt="">
+</div>
+
+<dialog id="endDialog" aria-labelledby="endTitle">
+  <h2 id="endTitle">수업을 종료할까요?</h2>
+  <p>저장 중인 기록을 PDF로 만든 뒤 학생 연결을 종료합니다.</p>
+  <div class="dialog-actions">
+    <button id="cancelEnd" class="secondary">취소</button>
+    <button id="confirmEnd" class="danger">종료하기</button>
+  </div>
+</dialog>
+<dialog id="msgDialog" aria-labelledby="msgTitle">
+  <h2 id="msgTitle">메시지 보내기</h2>
+  <p id="msgTarget" class="muted"></p>
+  <div id="msgQuick" class="quick"></div>
+  <input id="msgText" type="text" maxlength="300" placeholder="예) 3번 문제까지 풀고 손을 들어 주세요" aria-label="보낼 메시지">
+  <p id="msgHint" class="hint-line"></p>
+  <p id="msgResult" role="status"></p>
+  <div class="dialog-actions">
+    <button id="msgCancel" class="secondary">닫기</button>
+    <button id="msgSend">보내기</button>
+  </div>
+</dialog>
+<script src="/app.js"></script>
+</body>
+</html>

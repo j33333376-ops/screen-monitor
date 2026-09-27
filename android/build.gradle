@@ -1,0 +1,7 @@
+plugins { id 'com.android.application' version '8.13.2' apply false }
+
+// OneDrive can lock generated resource folders during incremental builds.
+// Source and final APK stay in the project; disposable build outputs stay local.
+def outputRoot = System.getenv('SCREEN_MONITOR_BUILD_DIR') ?: new File(System.getProperty('java.io.tmpdir'),
+        'screen-monitor-android-' + Integer.toHexString(rootDir.absolutePath.hashCode())).absolutePath
+allprojects { layout.buildDirectory.set(new File(outputRoot, project == rootProject ? 'root' : project.name)) }

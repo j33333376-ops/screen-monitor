@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>학생 앱 설치 · 화면 모니터</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; background: #f3f6fb; color: #16243a; font-family: 'Malgun Gothic', system-ui, sans-serif; line-height: 1.7; }
+main { max-width: 920px; margin: auto; padding: 44px 22px; }
+.eyebrow { color: #2563eb; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+h1 { font-size: clamp(28px, 5vw, 38px); margin: 8px 0; line-height: 1.3; }
+.intro { margin: 12px 0 24px; color: #526078; }
+.address { padding: 16px 20px; border-radius: 14px; background: #e5ecf7; margin-bottom: 26px; }
+.address strong { display: block; font-size: 22px; overflow-wrap: anywhere; }
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+article { background: white; padding: 26px; border: 1px solid #dde5f0; border-radius: 18px; }
+h2 { margin: 0 0 6px; font-size: 22px; }
+.meta { color: #64748b; font-size: 13px; margin: 0 0 20px; }
+.download { display: block; text-align: center; padding: 13px 18px; border-radius: 10px; background: #2563eb; color: white; text-decoration: none; font-weight: bold; }
+.download:focus-visible, a:focus-visible { outline: 3px solid #e59e22; outline-offset: 4px; }
+ol { padding-left: 22px; margin: 20px 0 0; font-size: 14px; }
+li { margin: 8px 0; }
+.note { font-size: 13px; color: #64748b; margin-top: 24px; }
+footer { margin-top: 30px; font-size: 13px; }
+footer a { color: #2563eb; }
+@media (max-width: 640px) { main { padding-top: 28px; } .cards { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">SCREEN MONITOR · 학생용</div>
+  <h1>내 기기로 수업에 참여하기</h1>
+  <p class="intro">선생님과 같은 Wi-Fi에 연결한 뒤, 기기에 맞는 앱을 설치하세요.<br>윈도우와 안드로이드 모두 같은 수업 코드로 참여합니다.</p>
+  <div class="address">앱에 입력할 서버 주소<strong id="serverAddress"></strong><span id="addressHint"></span></div>
+  <div class="cards">
+    <article>
+      <h2>안드로이드 태블릿</h2>
+      <p class="meta">갤럭시탭 등 · Android 8.0 이상 · 1.4.0 간편 IP 입력·메시지·손들기</p>
+      <a class="download" href="/download/android">안드로이드 앱 다운로드 (.apk)</a>
+      <ol>
+        <li>다운로드한 APK 파일을 열어 설치하세요. 설치 출처 허용이 필요한 경우 학교에서 허용한 방법으로 설치하세요.</li>
+        <li><b>학생 화면 전송</b> 앱을 열고 서버 주소의 빈칸에 네 번째 숫자를 입력하세요. 기본값은 <b>192 · 168 · 1 · 빈칸 : 8080</b>입니다. 선생님 주소가 다르면 나머지 칸도 바꿉니다. 수업 코드, 학년·반·번호·이름을 입력하세요.</li>
+        <li><b>전송 시작</b>을 누르고 화면 공유 창에서 <b>지금 시작</b>을 선택하세요. 공유 범위 선택 창이 나오면 <b>전체 화면</b>을 선택하세요.</li>
+        <li>학습 앱으로 이동하세요. 도움이 필요하면 앱의 <b>✋ 선생님 호출</b>을 누르세요. 앱이나 알림의 <b>전송 중지</b>로 언제든 멈출 수 있습니다.</li>
+      </ol>
+    </article>
+    <article>
+      <h2>윈도우 PC</h2>
+      <p class="meta">노트북·데스크톱 · 메시지·손들기 포함</p>
+      <a class="download" href="/download/windows">윈도우 앱 다운로드 (.exe)</a>
+      <ol>
+        <li>다운로드한 실행 파일을 여세요. 별도의 Python 설치는 필요하지 않습니다.</li>
+        <li>서버 주소의 빈칸에 네 번째 숫자를 입력하세요. 기본값은 <b>192 · 168 · 1 · 빈칸 : 8080</b>입니다. 선생님 주소가 다르면 나머지 칸도 바꿉니다. 수업 코드, 학년·반·번호·이름을 입력하세요.</li>
+        <li><b>전송 시작</b>을 누르세요. 도움이 필요하면 <b>✋ 선생님 호출</b>을 누르세요. 멈출 때는 <b>전송 중지</b>를 누릅니다.</li>
+        <li>창을 닫으면 프로그램이 끝나지 않고 작업 표시줄 오른쪽 끝 <b>트레이 아이콘</b>으로 숨으며 전송은 계속됩니다. 끝내려면 그 아이콘을 <b>우클릭해 ‘종료’</b>를 누르세요.</li>
+      </ol>
+    </article>
+  </div>
+  <p class="note">전송 중 선생님이 화면을 볼 수 있고 캡처를 PDF로 저장할 수 있습니다. 선생님이 보낸 안내 문구는 앱 화면(안드로이드는 알림에도)에 표시되며, 문구 안의 인터넷 주소를 누르면 브라우저가 열립니다. 도움이 필요하면 ✋ 선생님 호출을 누를 수 있습니다. 화면 꺼짐·절전 후에는 자동 복구를 시도합니다. Android가 공유 권한을 종료하면 앱에서 ‘전송 재개’를 누르고 다시 허용하세요. 최근 앱 목록에서 앱을 지우면 공유를 중지합니다. 설치가 학교 관리 정책으로 차단되면 담당 선생님에게 알려 주세요. 이 배포본은 iPad를 지원하지 않습니다.</p>
+  <footer><a href="/">교사 화면으로 이동</a></footer>
+</main>
+<script>
+const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+document.getElementById('serverAddress').textContent = local ? '서버 창에 표시된 교사 PC의 IP:포트' :
+  (location.protocol === 'https:' ? location.origin : location.host);
+document.getElementById('addressHint').textContent = local ?
+  '학생에게는 http://교사PC의IP:포트/student 주소를 알려 주세요.' :
+  '수업 코드는 선생님에게 확인하세요.';
+</script>
+</body>
+</html>

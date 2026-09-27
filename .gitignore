@@ -1,0 +1,31 @@
+# 학생 화면 기록 — 개인정보, 절대 올리지 않음
+captures/
+
+# 안드로이드 서명 자료 — 유출되면 가짜 업데이트 앱을 만들 수 있음
+android/signing/
+android/keystore.properties
+*.jks
+*.keystore
+
+# 배포 파일은 GitHub Releases에 첨부 (저장소에는 넣지 않음)
+server/node.exe
+client/dist/
+android/dist/
+
+# 의존성·빌드 산출물
+server/node_modules/
+__pycache__/
+*.pyc
+client/build/
+*.spec
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+.idea/
+
+# 기타
+*.log
+*.tmp
+Thumbs.db
+desktop.ini

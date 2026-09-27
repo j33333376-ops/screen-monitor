@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IP 주소 · 수업 코드</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; background: #f3f6fb; color: #16243a; font-family: "Malgun Gothic", system-ui, sans-serif; }
+main { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: clamp(12px, 3vw, 48px); gap: clamp(8px, 2vh, 20px); text-align: center; }
+.tools { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; }
+button, select, input { font: inherit; border: 1px solid #d7dfeb; border-radius: 10px; padding: 10px 14px; background: white; color: #334155; }
+button { cursor: pointer; }
+label { font-size: 14px; }
+section { background: white; border: 1px solid #dde5f0; border-radius: 24px; padding: clamp(10px, 2.2vh, 28px) clamp(16px, 3vw, 32px); }
+h1, h2 { margin: 0 0 6px; color: #526078; font-size: clamp(15px, min(2.4vw, 3.2vh), 26px); font-weight: 500; }
+#address { display: block; font-size: clamp(22px, min(6.5vw, 9vh), 90px); font-weight: 750; line-height: 1.15; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+#classCode { display: block; color: #2563eb; letter-spacing: .12em; font-size: clamp(40px, min(12vw, 16vh), 140px); font-weight: 800; line-height: 1.1; }
+.wifi { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; text-align: center; }
+.wifi > div { min-width: 0; }
+.wifi h2 { font-size: clamp(16px, 2vw, 22px); }
+#wifiSsid, #wifiKey { display: block; font-size: clamp(20px, min(4.5vw, 7vh), 64px); font-weight: 750; line-height: 1.15; overflow-wrap: anywhere; }
+#wifiKey { font-family: Consolas, "Malgun Gothic", monospace; letter-spacing: .04em; }
+#wifiKey.masked { letter-spacing: .2em; }
+.muted { color: #94a3b8; font-weight: 500; font-size: clamp(14px, min(2vw, 3vh), 24px); }
+#status { margin: 0; font-size: 16px; color: #526078; }
+#wifiForm { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 16px; padding: 12px 16px; font-size: 14px; }
+#wifiForm input[type=text] { width: 220px; }
+.hidden { display: none !important; }
+@media (max-width: 700px) { .wifi { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="tools">
+    <label id="addressChoice" class="hidden">접속할 네트워크 <select id="addresses" aria-label="접속할 네트워크"></select></label>
+    <label><input type="checkbox" id="wifiToggle" checked> Wi-Fi 표시</label>
+    <label><input type="checkbox" id="keyToggle" checked> 비밀번호 표시</label>
+    <button id="wifiEdit" aria-expanded="false">Wi-Fi 정보 수정</button>
+    <button id="fullscreen">전체 화면</button>
+  </div>
+  <form id="wifiForm" class="hidden">
+    <label>Wi-Fi 이름 <input type="text" id="wifiSsidInput" maxlength="64" autocomplete="off"></label>
+    <label>비밀번호 <input type="text" id="wifiKeyInput" maxlength="64" autocomplete="off"></label>
+    <button type="submit">적용</button>
+    <button type="button" id="wifiAuto">자동 감지 값으로</button>
+    <span id="wifiSource" class="muted"></span>
+  </form>
+  <section><h1>서버 IP 주소 · 포트</h1><strong id="address">확인 중…</strong></section>
+  <section><h2>수업 코드</h2><strong id="classCode">------</strong></section>
+  <section id="wifiSection" class="wifi">
+    <div><h2>Wi-Fi 이름</h2><strong id="wifiSsid">확인 중…</strong></div>
+    <div><h2>Wi-Fi 비밀번호</h2><strong id="wifiKey">확인 중…</strong></div>
+  </section>
+  <p id="status" role="status">교사 화면에서 접속 정보를 기다리는 중…</p>
+</main>
+<script src="/connection.js"></script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'kr.school.screenmonitor'
+    compileSdk 36
+    buildToolsVersion '36.1.0'
+    defaultConfig {
+        applicationId 'kr.school.screenmonitor'
+        minSdk 26
+        targetSdk 36
+        versionCode 5
+        versionName '1.4.0'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    testOptions.unitTests.all {
+        systemProperty 'screenMonitorRoot', rootProject.projectDir.parentFile.absolutePath
+    }
+    // Release signing stays local; no private key is included in the student APK.
+    def signingFile = rootProject.file('keystore.properties')
+    if (signingFile.exists()) {
+        def keys = new Properties()
+        signingFile.withInputStream { keys.load(it) }
+        signingConfigs {
+            school {
+                storeFile rootProject.file(keys['storeFile'])
+                storePassword keys['storePassword']
+                keyAlias keys['keyAlias']
+                keyPassword keys['keyPassword']
+            }
+        }
+        buildTypes.release.signingConfig signingConfigs.school
+    }
+}
+
+dependencies {
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+}
