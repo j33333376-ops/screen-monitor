@@ -45,9 +45,12 @@ function receiveLessonTitle(title = '') {
 }
 $('lessonTitle').oninput = () => {
   lessonTitleDirty = true;
-  $('lessonTitleStatus').textContent = '수업명 적용을 누르세요. 저장 중지·수업 종료 때도 자동 반영됩니다.';
+  $('lessonTitleStatus').textContent = '수업명 적용을 누르세요. 저장 버튼·수업 종료 때도 자동 반영됩니다.';
 };
 $('lessonTitleBtn').onclick = () => {
+  const reason = lockReason('title');
+  if (reason) { showLocked(reason); return; }
+  hideLocked();
   submittedLessonTitle = $('lessonTitle').value;
   if (send({ t: 'lessonTitle', lessonTitle: submittedLessonTitle })) {
     $('lessonTitleStatus').textContent = '수업명 적용 중…';
@@ -385,6 +388,13 @@ function onMessage(ev) {
     case 'ended':
       resetSession(msg.reason || '수업이 종료되었습니다.');
       break;
+    case 'settingLocked':
+      // 다른 교사 화면(태블릿 등)에서 저장을 먼저 시작한 경우처럼, 서버가 변경을 거절했다.
+      savePending = false;
+      showLocked(msg.msg);
+      if (msg.setting === 'title') $('lessonTitleStatus').textContent = '수업명을 적용하지 못했습니다. 위 안내를 확인하세요.';
+      showSaveInfo();
+      break;
     case 'error':
       if (msg.resumeFailed) { resetSession(msg.msg); break; }
       if (code) {
@@ -594,12 +604,11 @@ function removeTile(id) {
 let saveState = { on: false, intervalSec: 30, dir: '' };
 function showSaveInfo(save) {
   if (save) saveState = save;
-  const titleLocked = !connected || ending || savePending || !!saveState.busy || !!saveState.retry;
-  $('lessonTitle').disabled = titleLocked;
-  $('lessonTitleBtn').disabled = titleLocked;
+  // 잠긴 칸은 눌리게 두고(비활성화하면 아무 반응이 없어 이유를 알 수 없다), 바꾸려 할 때 이유를 보여 준다.
+  setLocked($('lessonTitle'), lockReason('title'));
+  setLocked($('lessonTitleBtn'), lockReason('title'));
   $('saveQuality').value = saveState.quality || 'standard';
-  const locked = !connected || ending || savePending || saveState.on || !!saveState.busy || !!saveState.retry;
-  $('saveQuality').disabled = locked;
+  setLocked($('saveQuality'), lockReason('quality'));
   const select = $('saveInterval');
   const choices = (saveState.intervalChoices || [30]).map(Number);
   if (select.dataset.choices !== choices.join(',')) {
@@ -613,10 +622,12 @@ function showSaveInfo(save) {
     }
   }
   select.value = String(saveState.intervalSec ?? 30);
-  select.disabled = locked;
+  setLocked(select, lockReason('interval'));
   $('qualityNotice').textContent = (saveState.quality === 'ai'
     ? 'AI 분석용 · 긴 변 최대 2560px, JPEG 품질 85 · 저장 시점에 별도 촬영하며 파일 용량이 커집니다.'
-    : '기본 · 현재 화면 화질로 저장합니다.') + (saveState.on ? ' 화질을 바꾸려면 저장을 중지하세요.' : ' 저장 화질을 선택하고 저장 시작을 누르세요.');
+    : '기본 · 현재 화면 화질로 저장합니다.') + (saveState.on || saveState.paused
+      ? ' 한 수업의 기록은 같은 화질로 이어지므로 화질은 수업 종료 후 새 수업에서 바꿀 수 있습니다.'
+      : ' 저장 화질을 선택하고 저장 시작을 누르세요.');
   $('saveWarning').textContent = saveState.warning || '';
   const needsAttention = !!(saveState.error || saveState.retry || saveState.warning);
   $('settingsBtn').classList.toggle('attention', needsAttention);
@@ -638,20 +649,35 @@ function showSaveInfo(save) {
     $('saveNotice').textContent = '마지막 캡처를 수집하고 PDF 파일을 만드는 중입니다. 완료할 때까지 서버를 켜 두세요.';
     return;
   }
+  if (saveState.pausing) {
+    el.disabled = true;
+    el.textContent = '일시정지 중…';
+    $('saveNotice').textContent = '멈추는 순간의 화면을 한 장 남기는 중입니다.';
+    return;
+  }
   if (saveState.retry) {
     el.textContent = 'PDF 저장 재시도';
     $('saveNotice').textContent = saveState.error;
     return;
   }
-  $('saveNotice').textContent = saveState.error || saveState.result || (saveState.on ? '화면 기록 수집 중 · 저장 중지 또는 수업 종료 시 PDF가 만들어집니다.' : '화면 기록 저장 꺼짐');
+  $('saveNotice').textContent = saveState.error || saveState.result || (saveState.on
+    ? '화면 기록 수집 중 · 수업 종료 때 학생마다 PDF 1개로 저장됩니다.'
+    : saveState.paused
+      ? `저장 일시정지 중 · 지금까지 ${saveState.captured || 0}장 보관 중. 다시 시작하면 같은 PDF에 이어서 쌓고, 수업 종료 때 저장됩니다.`
+      : '화면 기록 저장 꺼짐');
+  el.classList.toggle('paused', !saveState.on && !!saveState.paused);
   if (saveState.on) {
-    el.textContent = '● 저장 중지';
+    el.textContent = '⏸ 저장 일시정지';
     el.classList.add('on');
-    el.title = `${saveState.intervalSec}초 간격으로 기록 중 · 누르면 PDF로 저장하고 기록을 멈춥니다.\n저장 폴더: ${saveState.dir}`;
+    el.title = `${saveState.intervalSec}초 간격으로 기록 중 · 누르면 기록을 잠시 멈춥니다(모은 캡처는 보관).\n수업 종료 때 학생마다 PDF 1개로 저장 · 저장 폴더: ${saveState.dir}`;
+  } else if (saveState.paused) {
+    el.textContent = '● 저장 다시 시작';
+    el.classList.remove('on');
+    el.title = `일시정지 중 · 누르면 같은 기록에 이어서 캡처합니다.\n저장 폴더: ${saveState.dir}`;
   } else {
     el.textContent = '○ 저장 시작';
     el.classList.remove('on');
-    el.title = '저장 폴더: ' + saveState.dir + '\n누르면 이 수업 화면을 저장하기 시작합니다.';
+    el.title = '저장 폴더: ' + saveState.dir + '\n누르면 이 수업 화면을 저장하기 시작합니다. 수업 종료 때 학생마다 PDF 1개로 저장됩니다.';
   }
 }
 $('saveBtn').onclick = () => {
@@ -664,16 +690,71 @@ $('saveBtn').onclick = () => {
   showSaveInfo();
   $('saveBtn').disabled = true;
   // 응답이 올 때까지 버튼에 처리 중 표시(대화상자 차단 환경에서도 동작하도록 confirm 미사용)
-  $('saveBtn').textContent = turningOn ? '저장 시작 중…' : '저장 중지 중…';
+  $('saveBtn').textContent = saveState.retry ? 'PDF 저장 재시도 중…' : turningOn ? '저장 시작 중…' : '일시정지 중…';
 };
 
+// ---------- 지금 바꿀 수 없는 설정 ----------
+// 서버(server.js settingLockReason)와 같은 규칙. 여기서 먼저 막고, 동시에 다른 교사 화면에서 바뀐 경우는 서버가 알려 준다.
+function lockReason(kind) {
+  if (!connected) return '서버 연결이 끊겨 지금은 바꿀 수 없습니다. 다시 연결되면 시도하세요.';
+  if (ending) return '수업을 종료하는 중이라 바꿀 수 없습니다.';
+  if (saveState.busy) return 'PDF를 저장하는 중이라 바꿀 수 없습니다. 저장이 끝난 뒤 다시 시도하세요.';
+  if (saveState.retry) return 'PDF 저장에 실패한 기록이 있어 바꿀 수 없습니다. 먼저 저장 버튼의 PDF 저장 재시도를 누르세요.';
+  if (savePending || saveState.pausing) return '저장 설정을 처리하는 중입니다. 잠시 뒤 다시 시도하세요.';
+  if (kind === 'quality' && (saveState.on || saveState.paused)) {
+    return '저장을 시작한 수업은 화질을 바꿀 수 없습니다. 한 PDF에 한 가지 화질로만 저장되기 때문입니다. 수업을 종료한 뒤 새 수업을 시작할 때 고르세요.';
+  }
+  if (kind === 'interval' && saveState.on) {
+    return '저장 중에는 캡처 주기를 바꿀 수 없습니다. ⏸ 저장 일시정지를 누른 뒤 바꾸고, 다시 시작하세요.';
+  }
+  return '';
+}
+
+function setLocked(el, reason) {
+  if (el.dataset.baseTitle === undefined) el.dataset.baseTitle = el.title || '';
+  el.classList.toggle('locked', !!reason);
+  el.setAttribute('aria-disabled', String(!!reason));
+  el.title = reason || el.dataset.baseTitle;
+  if (el.tagName === 'INPUT') el.readOnly = !!reason;
+}
+
+// 읽는 도중 사라지지 않게, 설정 창을 닫거나 허용된 변경을 할 때까지 남겨 둔다.
+function showLocked(message) {
+  $('lockNotice').textContent = `🔒 ${message}`;
+  $('lockNotice').classList.remove('hidden');
+}
+function hideLocked() { $('lockNotice').classList.add('hidden'); }
+$('settingsDialog').addEventListener('close', hideLocked);
+
+// 잠긴 칸을 누르거나 키로 바꾸려 하면 이유를 보여 준다. Tab으로 지나가는 것은 막지 않는다.
+function guardLocked(el, kind) {
+  const block = event => {
+    const reason = lockReason(kind);
+    if (!reason) return;
+    event.preventDefault();
+    showLocked(reason);
+  };
+  el.addEventListener('mousedown', block);
+  el.addEventListener('keydown', event => { if (!['Tab', 'Shift', 'Escape'].includes(event.key)) block(event); });
+}
+guardLocked($('saveQuality'), 'quality');
+guardLocked($('saveInterval'), 'interval');
+guardLocked($('lessonTitle'), 'title');
+
+// 터치 기기처럼 목록이 그래도 열려 값이 바뀌면, 되돌리고 이유를 보여 준다.
 $('saveQuality').onchange = () => {
+  const reason = lockReason('quality');
+  if (reason) { showLocked(reason); showSaveInfo(); return; }
+  hideLocked();
   if (!send({ t: 'saveQuality', quality: $('saveQuality').value })) return;
   savePending = true;
   showSaveInfo();
 };
 
 $('saveInterval').onchange = () => {
+  const reason = lockReason('interval');
+  if (reason) { showLocked(reason); showSaveInfo(); return; }
+  hideLocked();
   if (!send({ t: 'saveInterval', interval: Number($('saveInterval').value) })) return;
   savePending = true;
   showSaveInfo();

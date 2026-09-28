@@ -13,6 +13,18 @@ const { normalizeLessonTitle } = require('./lesson-title');
 const { readWifi } = require('./wifi-info');
 const QRCode = require('qrcode');
 
+// 지금 바꿀 수 없는 설정이면 교사에게 보여 줄 이유를, 바꿀 수 있으면 ''를 돌려준다.
+// 교사 화면(app.js lockReason)도 같은 규칙으로 먼저 막고, 이 판정은 다른 교사 화면과 동시에 누른 경우를 위한 것이다.
+function settingLockReason(session, kind) {
+  if (session.ending) return '수업을 종료하는 중이라 바꿀 수 없습니다.';
+  if (session.savePromise) return 'PDF를 저장하는 중이라 바꿀 수 없습니다. 저장이 끝난 뒤 다시 시도하세요.';
+  if (kind !== 'title' && session.saveStopping) return '일시정지를 처리하는 중입니다. 잠시 뒤 다시 시도하세요.';
+  if (session.saveBatch) return 'PDF 저장에 실패한 기록이 있어 바꿀 수 없습니다. 먼저 저장 버튼의 PDF 저장 재시도를 누르세요.';
+  if (kind === 'quality' && session.recordingOpen) return '저장을 시작한 수업은 화질을 바꿀 수 없습니다. 한 PDF에 한 가지 화질로만 저장되기 때문입니다. 수업을 종료한 뒤 새 수업을 시작할 때 고르세요.';
+  if (kind === 'interval' && session.saveOn) return '저장 중에는 캡처 주기를 바꿀 수 없습니다. ⏸ 저장 일시정지를 누른 뒤 바꾸고, 다시 시작하세요.';
+  return '';
+}
+
 function updateLessonTitle(session, value) {
   if (session.savePromise || session.saveBatch || session.ending) return false;
   session.lessonTitle = normalizeLessonTitle(value);
@@ -69,7 +81,8 @@ const history = createHistory({
 const captureRequests = createCaptureRequests({ send });
 const recorder = createRecorder({
   dir: SAVE_DIR, intervalMs: SAVE_INTERVAL_MS, intervalChoices: SAVE_INTERVAL_CHOICES,
-  maxBytes: positiveNumber('MAX_SAVE_MB', 256, 1, 2048) * 1024 * 1024,
+  // 일시정지 기능으로 한 수업의 캡처를 수업 종료까지 모으므로 기본 한도를 넉넉히 둔다(35명·10초·50분 ≈ 230MB).
+  maxBytes: positiveNumber('MAX_SAVE_MB', 512, 1, 2048) * 1024 * 1024,
   notify: broadcastSave,
   onCapture: history.add,
   fetchCapture: captureRequests.request,
@@ -429,7 +442,10 @@ wss.on('connection', (ws, req) => {
       const session = sessions.get(ws.code);
       if (!session || session.ending) return;
       if (msg.t === 'lessonTitle') {
-        if (!updateLessonTitle(session, msg.lessonTitle)) send(ws, { t: 'error', msg: 'PDF 저장과 재시도를 마친 뒤 수업명을 변경하세요.' });
+        if (!updateLessonTitle(session, msg.lessonTitle)) {
+          send(ws, { t: 'settingLocked', setting: 'title', lessonTitle: session.lessonTitle,
+            msg: settingLockReason(session, 'title') || '지금은 수업명을 바꿀 수 없습니다.' });
+        }
         return;
       }
       if (msg.t === 'connectionInfo') return send(ws, { t: 'connectionInfo', connection: connectionInfo() });
@@ -460,13 +476,19 @@ wss.on('connection', (ws, req) => {
       else if (msg.t === 'save') {
         if (typeof msg.on !== 'boolean') return;
         if (Object.hasOwn(msg, 'lessonTitle')) updateLessonTitle(session, msg.lessonTitle);
+        // 저장 중지는 일시정지다. PDF는 수업 종료 때 학생별 1개로 만든다.
+        // 단, PDF 저장 실패 뒤 누르는 버튼(재시도)은 바로 PDF 저장을 다시 시도한다.
         if (msg.on) recorder.start(session);
-        else void recorder.finish(session);
+        else if (session.saveBatch) void recorder.finish(session);
+        else void recorder.pause(session);
         broadcastSave(session);
       }
       else if (msg.t === 'saveQuality') {
         if (!['standard', 'ai'].includes(msg.quality)) return;
-        if (session.saveOn || session.savePromise || session.saveBatch) {
+        // 일시정지 중에도 같은 PDF에 이어 쌓으므로 화질은 수업 종료까지 고정한다.
+        const locked = settingLockReason(session, 'quality');
+        if (locked) {
+          send(ws, { t: 'settingLocked', setting: 'quality', msg: locked });
           return send(ws, { t: 'saveState', save: recorder.info(session) });
         }
         session.saveQuality = msg.quality;
@@ -474,7 +496,9 @@ wss.on('connection', (ws, req) => {
       }
       else if (msg.t === 'saveInterval') {
         if (!SAVE_INTERVAL_CHOICES.includes(Number(msg.interval))) return;
-        if (session.saveOn || session.savePromise || session.saveBatch) {
+        const locked = settingLockReason(session, 'interval');
+        if (locked) {
+          send(ws, { t: 'settingLocked', setting: 'interval', msg: locked });
           return send(ws, { t: 'saveState', save: recorder.info(session) });
         }
         session.saveIntervalMs = intervalMs(msg.interval);
@@ -511,7 +535,7 @@ wss.on('connection', (ws, req) => {
       else if (msg.t === 'remove') {
         for (const [key, st] of session.students) {
           if (st.id === Number(msg.id) && !st.ws) {
-            if (st.frames.length) return send(ws, { t: 'error', msg: '저장 중지를 눌러 PDF 저장을 완료한 뒤 학생을 지우세요.' });
+            if (st.frames.length) return send(ws, { t: 'error', msg: '이 학생의 화면 기록은 수업 종료 때 PDF로 저장됩니다. 그 전에는 지울 수 없습니다.' });
             history.clearStudent(st);
             session.students.delete(key);
             toTeachers(session, JSON.stringify({ t: 'removed', id: st.id }), false);
@@ -619,6 +643,8 @@ async function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+// Windows에서 서버 창(콘솔)을 닫으면 SIGHUP이 온다. 모아 둔 캡처를 PDF로 저장하려고 시도한다(몇 초 안에 끝나야 함).
+process.on('SIGHUP', shutdown);
 
 server.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   if (process.send) process.send({ port: server.address().port });

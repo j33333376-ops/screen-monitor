@@ -2,11 +2,27 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { PDFDocument } = require('pdf-lib');
+const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const { normalizeLessonTitle, lessonFilenamePart } = require('./lesson-title');
 const safe = (value, max = 20) => String(value ?? '').replace(/[\x00-\x1f\\/:*?"<>|]/g, '_')
   .replace(/\s+/g, '').replace(/[. ]+$/g, '').slice(0, max) || '_';
 const pad = (n) => String(n).padStart(2, '0');
+
+// PDF 페이지에 찍는 캡처 시각. 교사 노트북(서버)의 시계·시간대 기준이다.
+function captureTimeText(at) {
+  const d = new Date(at);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+// 오른쪽 아래에 반투명 검은 띠 + 흰 글씨. 글자 크기는 이미지 폭에 맞춰 키운다(480px → 11pt, 2560px → 57pt).
+function stampCaptureTime(page, font, at, width) {
+  const size = Math.max(9, Math.round(width / 45));
+  const text = captureTimeText(at);
+  const textWidth = font.widthOfTextAtSize(text, size);
+  const margin = Math.round(size * 0.4);
+  page.drawRectangle({ x: width - textWidth - margin * 3, y: margin,
+    width: textWidth + margin * 2, height: size + margin * 1.6, color: rgb(0, 0, 0), opacity: 0.6 });
+  page.drawText(text, { x: width - textWidth - margin * 2, y: margin * 1.8, size, font, color: rgb(1, 1, 1) });
+}
 
 function createRecorder({ dir, intervalMs, intervalChoices = [], maxBytes, notify, onCapture = () => {}, fetchCapture = async () => null }) {
   let bufferedBytes = 0;
@@ -20,12 +36,23 @@ function createRecorder({ dir, intervalMs, intervalChoices = [], maxBytes, notif
       if (s.missedCaptures) warnings.push(`고화질 캡처 ${s.missedCaptures}회 수신 실패 · 연결 상태를 확인하세요.`);
       if (s.spoolError) warnings.push('임시 캡처 저장 실패 · 디스크 공간/경로를 확인하세요. 남은 기록을 PDF로 저장합니다.');
     }
-    return { on: s.saveOn, busy: !!s.savePromise, retry: !!s.saveBatch, quality: s.saveQuality || 'standard',
+    const captured = s.recordingOpen ? [...s.students.values()].reduce((n, st) => n + st.frames.length, 0) : 0;
+    return { on: s.saveOn, paused: !!s.recordingOpen && !s.saveOn, captured,
+      pausing: !!s.saveOn && !!s.saveStopping && !s.savePromise,
+      busy: !!s.savePromise, retry: !!s.saveBatch, quality: s.saveQuality || 'standard',
       warning: warnings.join(' '), error: s.saveError || '', result: s.saveResult || '',
       intervalSec: period(s) / 1000, intervalChoices, dir };
   }
+  // 한 번 시작한 기록(recordingOpen)은 수업 종료(finish)까지 이어진다.
+  // 일시정지(pause) 뒤 다시 시작하면 같은 PDF에 이어서 쌓는다.
   function start(s, quality = s.saveQuality || 'standard') {
-    if (s.saveOn || s.savePromise || s.saveBatch || !['standard', 'ai'].includes(quality)) return false;
+    if (s.saveOn || s.saveStopping || s.savePromise || s.saveBatch || !['standard', 'ai'].includes(quality)) return false;
+    if (s.recordingOpen) {
+      s.saveOn = true;
+      s.saveResult = '';
+      s.nextSaveAt = Date.now() + period(s);
+      return true;
+    }
     const now = new Date();
     s.saveStamp = { date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
       time: `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}_${crypto.randomBytes(4).toString('hex')}` };
@@ -33,7 +60,7 @@ function createRecorder({ dir, intervalMs, intervalChoices = [], maxBytes, notif
     s.spoolDir = path.join(dir, '.pending', `${s.saveStamp.date}_${s.saveStamp.time}_${safe(s.code)}`);
     s.pendingWrites = new Set();
     s.missedCaptures = 0; s.spoolError = false;
-    s.saveOn = true; s.saveStopping = false;
+    s.saveOn = true; s.saveStopping = false; s.recordingOpen = true;
     s.saveError = ''; s.saveResult = '';
     s.nextSaveAt = Date.now() + period(s);
     for (const st of s.students.values()) { st.frames = []; st.savedHash = null; }
@@ -63,7 +90,7 @@ function createRecorder({ dir, intervalMs, intervalChoices = [], maxBytes, notif
         }
       })().finally(() => s.pendingWrites.delete(writing));
       s.pendingWrites.add(writing);
-    } else st.frames.push(bytes);
+    } else st.frames.push({ bytes, at });
     onCapture(s, st, bytes, at);
   }
   function capture(s, st) {
@@ -98,16 +125,31 @@ function createRecorder({ dir, intervalMs, intervalChoices = [], maxBytes, notif
       });
     }
   }
+  // 캡처만 멈추고 모은 이미지는 그대로 둔다. 멈추는 순간의 화면도 한 장 남긴다.
+  async function pause(s) {
+    if (!s.saveOn || s.saveStopping || s.savePromise) return false;
+    s.saveStopping = true;
+    notify(s);
+    try {
+      await Promise.all([...s.students.values()].map(st => capture(s, st)));
+    } finally {
+      s.saveOn = false;
+      s.saveStopping = false;
+      notify(s);
+    }
+    return true;
+  }
   function finish(s) {
     if (s.savePromise) return s.savePromise;
-    if (!s.saveOn && !s.saveBatch) return Promise.resolve(true);
+    if (!s.recordingOpen && !s.saveBatch) return Promise.resolve(true);
     s.saveStopping = true;
     // Freeze the label before waiting for the last capture; retries keep the same filename/metadata.
     const lessonTitle = normalizeLessonTitle(s.lessonTitle);
     s.savePromise = Promise.resolve().then(async () => {
-      if (s.saveOn) {
-        await Promise.all([...s.students.values()].map(st => capture(s, st)));
+      if (s.recordingOpen) {
+        if (s.saveOn) await Promise.all([...s.students.values()].map(st => capture(s, st)));
         s.saveOn = false;
+        s.recordingOpen = false;
         await Promise.all(s.pendingWrites || []);
         const sp = s.saveStamp;
         s.saveBatch = [...s.students.values()].filter(st => st.frames.length).map(st => {
@@ -134,23 +176,22 @@ function createRecorder({ dir, intervalMs, intervalChoices = [], maxBytes, notif
           pdf.setTitle(item.title);
           pdf.setSubject(item.subject);
           pdf.setKeywords(item.keywords);
+          const font = await pdf.embedFont(StandardFonts.Helvetica);
           for (const frame of item.frames) {
             // pdf-lib requires an ArrayBuffer starting at offset zero.
-            const bytes = frame instanceof Uint8Array ? frame :
-              frame.bytes || Uint8Array.from(await fs.readFile(frame.file));
+            const bytes = frame.bytes || Uint8Array.from(await fs.readFile(frame.file));
             const jpg = await pdf.embedJpg(bytes);
             const page = pdf.addPage([jpg.width, jpg.height]);
             page.drawImage(jpg, { x: 0, y: 0, width: jpg.width, height: jpg.height });
+            if (frame.at) stampCaptureTime(page, font, frame.at, jpg.width);
           }
           await fs.mkdir(path.dirname(item.file), { recursive: true });
           await fs.writeFile(temp, await pdf.save());
           await fs.rename(temp, item.file);
           for (const frame of item.frames) {
-            if (frame instanceof Uint8Array) bufferedBytes -= frame.length;
-            else {
-              if (frame.bytes) bufferedBytes -= frame.bytes.length;
-              await fs.unlink(frame.file).catch(() => {});
-            }
+            // 기본 화질은 메모리에, 고화질은 임시 파일로(임시 저장 실패분은 메모리에도) 남아 있다.
+            if (frame.bytes) bufferedBytes -= frame.bytes.length;
+            if (frame.file) await fs.unlink(frame.file).catch(() => {});
           }
           s.saveBatch.splice(s.saveBatch.indexOf(item), 1);
           saved++;
@@ -171,6 +212,6 @@ function createRecorder({ dir, intervalMs, intervalChoices = [], maxBytes, notif
     notify(s);
     return s.savePromise;
   }
-  return { info, start, tick, finish, capture };
+  return { info, start, pause, tick, finish, capture };
 }
-module.exports = { createRecorder };
+module.exports = { createRecorder, captureTimeText };

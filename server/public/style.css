@@ -64,10 +64,11 @@ header .code b { font-size: 20px; letter-spacing: 2px; color: var(--accent); }
 header .stat { color: var(--muted); font-size: 13px; width: 70px; font-variant-numeric: tabular-nums; }
 header .spacer { flex: 1; }
 header .save-btn {
-  width: 130px; font-size: 13px; font-weight: 600; padding: 6px 8px; border-radius: 20px;
+  width: 140px; font-size: 13px; font-weight: 600; padding: 6px 8px; border-radius: 20px;
   background: #eef1f6; color: #444; border: 1px solid var(--line);
 }
 header .save-btn.on { background: var(--danger); color: #fff; border-color: var(--danger); }
+header .save-btn.paused { background: #fff0d6; color: #8a4b08; border-color: #e98b12; }
 header .save-btn:hover { filter: brightness(0.97); }
 #helpBtn { width: 98px; font-variant-numeric: tabular-nums; }
 #helpBtn.active { background: #fff0d6; color: #8a4b08; border-color: #e98b12; }
@@ -79,6 +80,10 @@ header .save-btn:hover { filter: brightness(0.97); }
 .setting-fields { display: grid; gap: 14px; margin-top: 24px; }
 .setting-fields label { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; }
 .setting-fields select, .setting-fields input { width: 210px; max-width: 65%; }
+.locked { opacity: .6; cursor: not-allowed; }
+.lesson-input.locked { background: #eef1f6; }
+.lock-notice { margin: 0 0 14px; padding: 10px 12px; font-size: 13px; line-height: 1.6; color: #8a4b08;
+  background: #fff0d6; border: 1px solid #e98b12; border-radius: 8px; }
 .join-box { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
 .join-title { font-size: 13px; color: #526078; margin: 0 0 8px; text-align: left; }
 .card .join-box .lesson-input { margin: 0 0 10px; }

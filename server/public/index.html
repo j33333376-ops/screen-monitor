@@ -60,6 +60,7 @@
 
 <dialog id="settingsDialog" aria-labelledby="settingsTitle">
   <div class="panel-heading"><h2 id="settingsTitle">수업 설정</h2><button id="settingsClose" class="secondary">닫기</button></div>
+  <p id="lockNotice" class="lock-notice hidden" role="alert"></p>
   <div class="lesson-bar">
     <label for="lessonTitle">수업명 · 키워드 (선택)</label>
     <input id="lessonTitle" class="lesson-input" type="text" maxlength="40" placeholder="예: 분수의 나눗셈" aria-describedby="lessonTitleStatus">
@@ -68,13 +69,13 @@
   </div>
   <div class="setting-fields">
     <label class="quality-choice" for="saveQuality">저장 화질
-      <select id="saveQuality" title="화질을 바꾸려면 저장을 중지한 뒤 선택하세요.">
+      <select id="saveQuality" title="PDF에 저장할 캡처 화질">
         <option value="standard">기본</option>
         <option value="ai">AI 분석용 고화질</option>
       </select>
     </label>
     <label class="quality-choice" for="saveInterval">캡처 주기
-      <select id="saveInterval" title="주기를 바꾸려면 저장을 중지한 뒤 선택하세요."></select>
+      <select id="saveInterval" title="캡처를 모으는 간격"></select>
     </label>
     <label class="size">칸 크기
       <input id="sizeRange" type="range" min="160" max="420" value="260">

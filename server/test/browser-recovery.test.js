@@ -63,6 +63,32 @@ test('explicitly ended class is never restored by wake detection', () => {
   assert.equal(b.sockets.length, 1);
 });
 
+test('changing a locked setting is refused on the spot with the reason, and reverted', () => {
+  const b = browser();
+  const run = code => vm.runInContext(code, b.context);
+  const sent = () => b.sockets[0].sent.at(-1);
+  b.sockets[0].receive({ t: 'saveState', save: { on: true, quality: 'standard', intervalSec: 30, intervalChoices: [10, 20, 30] } });
+  run("$('saveQuality').value = 'ai'; $('saveQuality').onchange();");
+  assert.notEqual(sent().t, 'saveQuality', '저장 중 화질 변경은 서버로 보내지 않는다');
+  assert.match(run("$('lockNotice').textContent"), /화질을 바꿀 수 없습니다/);
+  assert.equal(run("$('saveQuality').value"), 'standard', '선택을 되돌린다');
+  run("$('saveInterval').value = '10'; $('saveInterval').onchange();");
+  assert.match(run("$('lockNotice').textContent"), /일시정지를 누른 뒤/);
+
+  // 일시정지 중: 주기는 바꿀 수 있고 화질은 여전히 잠긴다.
+  b.sockets[0].receive({ t: 'saveState', save: { on: false, paused: true, quality: 'standard', intervalSec: 30, intervalChoices: [10, 20, 30] } });
+  run("$('saveInterval').value = '10'; $('saveInterval').onchange();");
+  assert.deepEqual(sent(), { t: 'saveInterval', interval: 10 });
+  b.sockets[0].receive({ t: 'saveState', save: { on: false, paused: true, quality: 'standard', intervalSec: 10, intervalChoices: [10, 20, 30] } });
+  run("$('lockNotice').textContent = ''; $('saveQuality').value = 'ai'; $('saveQuality').onchange();");
+  assert.match(run("$('lockNotice').textContent"), /화질을 바꿀 수 없습니다/);
+
+  // 다른 교사 화면이 먼저 바꿔 서버가 거절한 경우에도 이유를 보여 준다.
+  b.sockets[0].receive({ t: 'settingLocked', setting: 'title', msg: 'PDF를 저장하는 중이라 바꿀 수 없습니다.' });
+  assert.match(run("$('lockNotice').textContent"), /PDF를 저장하는 중/);
+  assert.match(run("$('lessonTitleStatus').textContent"), /적용하지 못했습니다/);
+});
+
 test('title drafts survive reconnect and are included in save/end even without Apply', () => {
   const b = browser();
   vm.runInContext("$('lessonTitle').value = '분수의 나눗셈'; $('lessonTitle').oninput();", b.context);
