@@ -18,6 +18,18 @@
 - **처음 사용할 때 `server/서버시작.bat`의 `TEACHER_PASSWORD`를 꼭 바꾸세요.** 기본값 `teacher1234`는 이 공개 문서에 적혀 있습니다.
 - 서명되지 않은 실행 파일이라 Windows SmartScreen이나 백신이 경고할 수 있습니다. **추가 정보 → 실행**으로 진행합니다.
 
+## 이번 업데이트 (2026-09-28) — 학생 앱 1.5.0: 입력 기억·새 버전 알림
+
+**이번에는 학생 앱(Windows EXE·Android APK)도 바뀝니다. 한 번은 학생 기기에 새 앱을 직접 설치해야 합니다.** 이후 버전부터는 앱이 새 버전을 알려 줍니다.
+
+- **Windows 앱이 입력값을 기억합니다.** 서버 주소·학년·반·번호·이름을 이 PC 사용자 폴더(`%APPDATA%\ScreenMonitorStudent\settings.json`)에 저장해, 다음 실행 때 자동으로 채웁니다. 수업 코드는 수업마다 바뀌므로 저장하지 않습니다(Android 앱은 원래 이렇게 동작). 보통은 **수업 코드만 넣고 전송 시작**을 누르면 됩니다.
+- **새 버전 알림**: 교사 노트북(서버)에 든 학생 앱이 학생 기기의 앱보다 새로우면, 학생 앱에 **⬆ 새 버전 받기** 버튼이 나타납니다. 누르면 브라우저가 교사 노트북에서 새 파일을 받습니다. 인터넷이 없어도 됩니다.
+  - Windows: 받은 파일을 실행하기 전에 트레이 아이콘 우클릭 → **종료**로 기존 앱을 끄세요. 받은 파일 이름이 `학생화면전송 (1).exe`처럼 바뀔 수 있으니 다음부터는 새 파일을 실행합니다. 서명되지 않은 파일이라 SmartScreen 경고가 다시 나올 수 있습니다.
+  - Android: 받은 APK를 눌러 설치합니다(처음 한 번은 '이 출처 허용' 필요). 같은 서명이라 기존 앱 위에 업데이트되고 입력해 둔 정보는 남습니다.
+  - 자동으로 몰래 설치되지는 않습니다. 학생이 버튼과 설치 확인을 직접 누릅니다.
+- **교사 화면**: 이 서버의 앱보다 오래된 학생 앱을 쓰는 학생의 타일에 보라색 **⬆ 앱 업데이트** 표시가 붙습니다. 표시에 마우스를 올리면 버전을 보여 줍니다. 1.4.0 이하 앱은 알림 기능이 없으므로 `/student` 설치 페이지에서 새로 받게 하세요.
+- 앱 버전: Windows **1.5.0**(창 제목에 표시), Android **1.5.0 (versionCode 6)**.
+- 교사 서버는 앱 파일 옆의 `client/dist/version.json`, `android/dist/version.json`으로 최신 버전을 압니다. 빌드 스크립트가 자동으로 만듭니다(아래 유지보수용 재빌드 참고). 교사용 zip을 새 버전으로 바꾸면 학생 알림도 바로 반영됩니다.
 ## 이번 업데이트 (2026-09-28) — 저장 중지 → 일시정지, 학생당 PDF 1개
 
 - 교사 화면의 저장 버튼이 **○ 저장 시작 → ⏸ 저장 일시정지 → ● 저장 다시 시작**으로 바뀝니다. 일시정지는 캡처만 멈추고, 모아 둔 캡처는 그대로 보관합니다.
@@ -212,8 +224,7 @@ rem set MAX_SAVE_MB=256
 ```powershell
 python -m pip install -r client/requirements.txt
 python -m pip install pyinstaller==6.22.2
-cd client
-python -m PyInstaller --noconfirm --onefile --noconsole --name 학생화면전송 student.py
+client\윈도우앱빌드.bat   # 또는 client\build-exe.ps1 — 테스트 → EXE 빌드 → dist\version.json
 ```
 
-출력 파일은 `client/dist/학생화면전송.exe`입니다. 재빌드할 때는 해당 실행 파일을 먼저 종료하세요(트레이 아이콘 우클릭 → 종료). 트레이 아이콘에는 `pystray`가 필요하며 `client/requirements.txt`에 들어 있습니다.
+출력 파일은 `client/dist/학생화면전송.exe`와 `client/dist/version.json`입니다. **새 버전을 낼 때는 `client/student.py`의 `APP_VERSION`(Windows)과 `android/app/build.gradle`의 `versionCode`·`versionName`(Android)을 올린 뒤 빌드하세요.** 두 빌드 스크립트(`client/build-exe.ps1`, `android/build-apk.ps1`)가 `dist/version.json`을 만들고, 교사 서버는 이 파일로 학생 앱의 새 버전 여부를 판단합니다. 재빌드할 때는 해당 실행 파일을 먼저 종료하세요(트레이 아이콘 우클릭 → 종료). 트레이 아이콘에는 `pystray`가 필요하며 `client/requirements.txt`에 들어 있습니다.

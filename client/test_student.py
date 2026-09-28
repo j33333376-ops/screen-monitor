@@ -1,8 +1,13 @@
 import io
+import os
+import tempfile
 import tkinter as tk
 import unittest
 from unittest.mock import Mock, patch
 from PIL import Image
+
+# 테스트가 이 PC 사용자의 진짜 입력 기억 파일을 읽거나 덮어쓰지 않게 한다.
+os.environ["SCREEN_MONITOR_SETTINGS"] = os.path.join(tempfile.mkdtemp(), "settings.json")
 import student
 from student import App, Sender, Tray, capture_packet, link_spans
 

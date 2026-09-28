@@ -12,6 +12,7 @@ const { createCaptureRequests } = require('./capture-requests');
 const { normalizeLessonTitle } = require('./lesson-title');
 const { readWifi } = require('./wifi-info');
 const QRCode = require('qrcode');
+const { createAppVersions } = require('./app-versions');
 
 // 지금 바꿀 수 없는 설정이면 교사에게 보여 줄 이유를, 바꿀 수 있으면 ''를 돌려준다.
 // 교사 화면(app.js lockReason)도 같은 규칙으로 먼저 막고, 이 판정은 다른 교사 화면과 동시에 누른 경우를 위한 것이다.
@@ -115,6 +116,14 @@ const DOWNLOADS = {
   '/download/windows': { file: path.join(__dirname, '..', 'client', 'dist', '학생화면전송.exe'),
     type: 'application/octet-stream', name: '학생화면전송.exe' },
 };
+// 빌드 스크립트가 앱 파일 옆에 만든 버전 파일. APP_VERSION_DIR는 테스트에서만 바꾼다.
+const appVersions = createAppVersions(process.env.APP_VERSION_DIR ? {
+  windows: path.join(process.env.APP_VERSION_DIR, 'windows.json'),
+  android: path.join(process.env.APP_VERSION_DIR, 'android.json'),
+} : {
+  windows: path.join(__dirname, '..', 'client', 'dist', 'version.json'),
+  android: path.join(__dirname, '..', 'android', 'dist', 'version.json'),
+});
 
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
@@ -181,7 +190,9 @@ function toTeachers(session, data, isBinary) {
 
 function studentInfo(st) {
   return { id: st.id, grade: st.grade, cls: st.cls, num: st.num, name: st.name,
-    online: !!st.ws, paused: !!st.paused, help: !!st.help, helpAt: st.helpAt || 0, notice: !!st.notice };
+    online: !!st.ws, paused: !!st.paused, help: !!st.help, helpAt: st.helpAt || 0, notice: !!st.notice,
+    platform: st.app?.platform || null, appVersion: st.app?.version || null,
+    outdated: !!st.app?.outdated, latestVersion: st.app?.latestVersion || null };
 }
 
 function frameMessage(kind, id, jpeg) {
@@ -571,13 +582,17 @@ wss.on('connection', (ws, req) => {
       st.notice = msg.notice === true; st.help = msg.help === true;
       st.helpAt = st.help ? (st.helpAt || Date.now()) : 0;
       st.resumeKey = resumeKey; st.paused = msg.paused === true;
+      // 이 교사 서버에 든 학생 앱보다 오래된 앱이면 새 앱에 '새 버전 받기'를, 교사 화면에 표시를 띄운다.
+      st.app = appVersions.check(msg);
       if (previous && previous !== ws) previous.terminate();
       ws.role = 'student'; ws.code = session.code; ws.key = key;
-      send(ws, { t: 'ok', id: st.id, recording: session.saveOn, captureQuality: session.saveQuality || 'standard' });
+      send(ws, { t: 'ok', id: st.id, recording: session.saveOn, captureQuality: session.saveQuality || 'standard',
+        update: st.app.update });
       if (st.full) send(ws, { t: 'mode', full: true });
       toTeachers(session, JSON.stringify({ t: 'join', student: studentInfo(st) }), false);
       toTeachers(session, JSON.stringify({ t: 'saveState', save: recorder.info(session) }), false);
-      console.log(`[학생 접속] ${session.code} ${grade}학년 ${cls}반 ${num}번 ${name}`);
+      console.log(`[학생 접속] ${session.code} ${grade}학년 ${cls}반 ${num}번 ${name}` +
+        (st.app.outdated ? ` · 구버전 앱(${st.app.version || '버전 정보 없음'} → ${st.app.latestVersion})` : ''));
       return;
     }
   });

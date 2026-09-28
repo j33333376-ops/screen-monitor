@@ -115,31 +115,18 @@ public class ServerCompatibilityTest {
             assertEquals(studentId, resumed.message("ok").getInt("id"));
             assertTrue(resumed.message("mode").getBoolean("full"));
             assertFalse(teacher.message("join").getJSONObject("student").getBoolean("paused"));
+            // 저장 중지는 일시정지다. PDF는 수업 종료 때 학생마다 1개로 만든다.
             teacher.send(new JSONObject().put("t", "save").put("on", false));
             resumed.await(o -> o instanceof JSONObject && ((JSONObject) o).optString("t").equals("recording")
                     && !((JSONObject) o).optBoolean("on"));
             teacher.await(o -> o instanceof JSONObject && ((JSONObject) o).optString("t").equals("saveState")
                     && ((JSONObject) o).optJSONObject("save") != null
-                    && ((JSONObject) o).optJSONObject("save").optString("result").contains("완료"));
-            try (var files = Files.walk(output)) { assertTrue(files.anyMatch(p -> p.toString().endsWith(".pdf"))); }
-            resumed.captureImage = Files.readAllBytes(new File(root, "server/test/high-capture.jpg").toPath());
+                    && ((JSONObject) o).optJSONObject("save").optBoolean("paused")
+                    && !((JSONObject) o).optJSONObject("save").optBoolean("pausing"));
+            try (var files = Files.walk(output)) { assertFalse(files.anyMatch(p -> p.toString().endsWith(".pdf"))); }
+            // 저장을 시작한 수업은 화질을 바꿀 수 없고, 이유를 알려 준다.
             teacher.send(new JSONObject().put("t", "saveQuality").put("quality", "ai"));
-            teacher.await(o -> o instanceof JSONObject && ((JSONObject) o).optString("t").equals("saveState")
-                    && "ai".equals(((JSONObject) o).optJSONObject("save").optString("quality")));
-            teacher.send(new JSONObject().put("t", "save").put("on", true));
-            JSONObject recordingState = (JSONObject) resumed.await(o -> o instanceof JSONObject
-                    && ((JSONObject) o).optString("t").equals("recording") && ((JSONObject) o).optBoolean("on")
-                    && ((JSONObject) o).optString("captureQuality").equals("ai"));
-            assertEquals("ai", recordingState.getString("captureQuality"));
-            JSONObject captureRequest = resumed.message("capture");
-            assertEquals(2560, captureRequest.getInt("maxEdge"));
-            assertEquals(85, captureRequest.getInt("quality"));
-            teacher.message("historyChanged");
-            teacher.send(new JSONObject().put("t", "history").put("id", studentId).put("requestId", 3));
-            JSONObject highHistory = teacher.message("history");
-            int latestId = highHistory.getJSONArray("frames").getJSONObject(highHistory.getJSONArray("frames").length() - 1).getInt("id");
-            teacher.send(new JSONObject().put("t", "historyFrame").put("id", studentId).put("frameId", latestId).put("requestId", 4));
-            assertArrayEquals(resumed.captureImage, java.util.Base64.getDecoder().decode(teacher.message("historyFrame").getString("jpeg")));
+            assertTrue(teacher.message("settingLocked").getString("msg").contains("화질"));
             // 선생님 메시지와 손들기가 같은 수업에서 오간다.
             teacher.send(new JSONObject().put("t", "message").put("text", "3번 문제까지 풀어 주세요"));
             assertEquals("3번 문제까지 풀어 주세요", resumed.message("notice").getString("text"));
@@ -156,6 +143,35 @@ public class ServerCompatibilityTest {
 
             teacher.send(new JSONObject().put("t", "end"));
             resumed.message("end"); windows.message("end"); teacher.message("ended");
+            try (var files = Files.walk(output)) { assertTrue(files.anyMatch(p -> p.toString().endsWith(".pdf"))); }
+
+            // AI 분석용 고화질은 수업을 시작할 때 고른다. 서버가 요청한 원본 캡처를 태블릿이 보낸다.
+            Peer aiTeacher = new Peer(client, url); peers.add(aiTeacher);
+            aiTeacher.send(new JSONObject().put("t", "create").put("password", "android-protocol-test").put("quality", "ai"));
+            ConnectionOptions aiOptions = new ConnectionOptions(base, aiTeacher.message("created").getString("code"),
+                    "1", "2", "3", "태블릿테스트");
+            Peer tablet = new Peer(client, url); peers.add(tablet);
+            tablet.captureImage = Files.readAllBytes(new File(root, "server/test/high-capture.jpg").toPath());
+            assertTrue(tablet.ws.send(StudentProtocol.hello(aiOptions, resumeKey, false, false)));
+            JSONObject aiOk = tablet.message("ok");
+            assertEquals("ai", aiOk.getString("captureQuality"));
+            int tabletId = aiOk.getInt("id");
+            JSONObject captureRequest = tablet.message("capture");
+            assertEquals(2560, captureRequest.getInt("maxEdge"));
+            assertEquals(85, captureRequest.getInt("quality"));
+            JSONObject highHistory = null;
+            for (int requestId = 10; requestId < 60; requestId++) {
+                aiTeacher.send(new JSONObject().put("t", "history").put("id", tabletId).put("requestId", requestId));
+                highHistory = aiTeacher.message("history");
+                if (highHistory.getJSONArray("frames").length() > 0) break;
+                Thread.sleep(100);
+            }
+            assertTrue("고화질 캡처가 기록된다", highHistory.getJSONArray("frames").length() > 0);
+            int latestId = highHistory.getJSONArray("frames").getJSONObject(highHistory.getJSONArray("frames").length() - 1).getInt("id");
+            aiTeacher.send(new JSONObject().put("t", "historyFrame").put("id", tabletId).put("frameId", latestId).put("requestId", 99));
+            assertArrayEquals(tablet.captureImage, java.util.Base64.getDecoder().decode(aiTeacher.message("historyFrame").getString("jpeg")));
+            aiTeacher.send(new JSONObject().put("t", "end"));
+            tablet.message("end"); aiTeacher.message("ended");
             try (var files = Files.walk(output)) { assertTrue(files.anyMatch(p -> p.toString().endsWith("_AI고화질.pdf"))); }
         } finally {
             for (Peer peer : peers) peer.ws.cancel();

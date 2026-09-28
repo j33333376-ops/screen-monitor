@@ -436,7 +436,7 @@ function upsert(info) {
     el.className = 'tile';
     el.tabIndex = 0;
     el.setAttribute('role', 'button');
-    el.innerHTML = `<img alt=""><span class="badge">접속</span><span class="hand" title="도움 요청">✋</span>
+    el.innerHTML = `<img alt=""><span class="badge">접속</span><span class="app-update">⬆ 앱 업데이트</span><span class="hand" title="도움 요청">✋</span>
       <button class="remove" title="끊긴 학생 지우기">✕</button>
       <span class="stale">연결 대기…</span>
       <span class="label"><b></b><small></small></span>`;
@@ -458,6 +458,14 @@ function upsert(info) {
   t.el.querySelector('.label b').textContent = `${gradePart}${info.cls}반 ${info.num}번`;
   t.el.querySelector('.label small').textContent = info.name;
   t.el.setAttribute('aria-label', `${info.grade}학년 ${info.cls}반 ${info.num}번 ${info.name} 화면 확대`);
+  // 이 서버에 든 앱보다 오래된 학생 앱. 새 앱은 학생 화면에 '새 버전 받기'가 뜨고, 이 표시는 업데이트 후 사라진다.
+  t.el.classList.toggle('outdated', !!info.outdated);
+  const platform = info.platform === 'android' ? 'Android' : 'Windows';
+  t.el.querySelector('.app-update').title = info.outdated
+    ? `${platform} 학생 앱 ${info.appVersion || '구버전(버전 정보 없음)'} → 최신 ${info.latestVersion}\n` +
+      (info.appVersion ? '학생 앱에 뜬 “새 버전 받기”를 눌러 설치하게 하세요.'
+        : '이 앱은 업데이트 알림을 받지 못합니다. 학생 설치 페이지(/student)에서 새로 받게 하세요.')
+    : '';
   [...tiles.values()].sort((a, b) =>
     Number(a.info.grade) - Number(b.info.grade) || Number(a.info.cls) - Number(b.info.cls) || Number(a.info.num) - Number(b.info.num)
   ).forEach((tile, index) => {
@@ -700,7 +708,8 @@ function lockReason(kind) {
   if (ending) return '수업을 종료하는 중이라 바꿀 수 없습니다.';
   if (saveState.busy) return 'PDF를 저장하는 중이라 바꿀 수 없습니다. 저장이 끝난 뒤 다시 시도하세요.';
   if (saveState.retry) return 'PDF 저장에 실패한 기록이 있어 바꿀 수 없습니다. 먼저 저장 버튼의 PDF 저장 재시도를 누르세요.';
-  if (savePending || saveState.pausing) return '저장 설정을 처리하는 중입니다. 잠시 뒤 다시 시도하세요.';
+  // 수업명은 일시정지 처리 중에도 서버가 받아 준다(PDF 이름은 수업 종료 때 정해지므로).
+  if (kind !== 'title' && (savePending || saveState.pausing)) return '저장 설정을 처리하는 중입니다. 잠시 뒤 다시 시도하세요.';
   if (kind === 'quality' && (saveState.on || saveState.paused)) {
     return '저장을 시작한 수업은 화질을 바꿀 수 없습니다. 한 PDF에 한 가지 화질로만 저장되기 때문입니다. 수업을 종료한 뒤 새 수업을 시작할 때 고르세요.';
   }

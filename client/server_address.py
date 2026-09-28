@@ -64,6 +64,21 @@ class ServerAddressInput(ttk.Frame):
     def get(self):
         return self.full.get().strip() if self.direct.get() else ipv4_address([e.get() for e in self.parts])
 
+    def set(self, value):
+        """지난번에 쓴 주소를 되살린다. IP:포트는 다섯 칸에, 그 밖의 주소는 직접 입력 칸에 넣는다."""
+        value = str(value).strip()
+        match = re.fullmatch(r"(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}):(\d{1,5})", value)
+        if match:
+            self.direct.set(False)
+            for entry, part in zip(self.parts, match.groups()):
+                entry.delete(0, "end")
+                entry.insert(0, part)
+        elif value:
+            self.direct.set(True)
+            self.full.delete(0, "end")
+            self.full.insert(0, value)
+        self.switch_mode()
+
     def config(self, **kwargs):
         state = kwargs.pop("state", None)
         if state is not None:

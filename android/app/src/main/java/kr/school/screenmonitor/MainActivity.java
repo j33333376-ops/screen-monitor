@@ -39,14 +39,17 @@ public class MainActivity extends Activity {
     private LinearLayout addressRow, directAddress;
     private CheckBox directMode;
     private TextView status, notice;
-    private Button start, help;
+    private Button start, help, update;
+    private TextView updateHint;
     private boolean awaitingConsent;
     private Bundle pending;
     private ScreenShareService.State lastState;
+    private String[] lastUpdate;
     private final Runnable refresh = new Runnable() {
         @Override public void run() {
             ScreenShareService.State state = ScreenShareService.state;
-            if (state != lastState) { lastState = state; render(); }
+            String[] available = ScreenShareService.update;
+            if (state != lastState || available != lastUpdate) { lastState = state; lastUpdate = available; render(); }
             main.postDelayed(this, 400);
         }
     };
@@ -132,6 +135,22 @@ public class MainActivity extends Activity {
         form.addView(help, helpParams);
         help.setOnClickListener(v -> startService(new Intent(this, ScreenShareService.class)
                 .setAction(ScreenShareService.HELP).putExtra("on", !ScreenShareService.state.help)));
+        // 교사 서버에 더 새로운 앱이 있을 때만 보인다. 누르면 브라우저가 교사 노트북에서 새 APK를 받는다.
+        update = new Button(this);
+        update.setTextSize(15);
+        update.setAllCaps(false);
+        update.setTextColor(Color.parseColor("#5B21B6"));
+        update.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#EDE9FE")));
+        update.setVisibility(View.GONE);
+        LinearLayout.LayoutParams updateParams = new LinearLayout.LayoutParams(-1, dp(52));
+        updateParams.topMargin = dp(10);
+        form.addView(update, updateParams);
+        update.setOnClickListener(v -> openUpdate());
+        updateHint = text("받은 파일을 눌러 설치하세요. 처음 한 번은 ‘이 출처 허용’을 켜야 할 수 있습니다. "
+                + "설치하면 이 앱이 새 버전으로 바뀌고, 입력해 둔 정보는 그대로 남습니다.", 12, "#5B21B6");
+        updateHint.setPadding(0, dp(6), 0, 0);
+        updateHint.setVisibility(View.GONE);
+        form.addView(updateHint);
         notice = text("", 16, "#8A4B08");
         // 주소는 눌러서 브라우저로 열 수 있게 한다. setText 전에 지정해야 적용된다.
         notice.setAutoLinkMask(Linkify.WEB_URLS);
@@ -350,6 +369,20 @@ public class MainActivity extends Activity {
                 ScreenShareService.state.resumeOptions != null ? "전송 재개" : "전송 시작");
         start.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor(active ? "#DC4545" : "#2563EB")));
         status.setText(awaitingConsent ? "Android의 화면 공유 허용 창을 확인하세요." : ScreenShareService.state.message);
+        String[] available = ScreenShareService.update;
+        update.setVisibility(available == null ? View.GONE : View.VISIBLE);
+        updateHint.setVisibility(available == null ? View.GONE : View.VISIBLE);
+        if (available != null) update.setText("⬆ 새 버전 " + available[0] + "이 있습니다 · 받기");
+    }
+
+    private void openUpdate() {
+        String[] available = ScreenShareService.update;
+        if (available == null) return;
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(available[1])));
+        } catch (android.content.ActivityNotFoundException error) {
+            status.setText("브라우저를 열지 못했습니다. 선생님께 새 버전 파일을 받아 주세요.");
+        }
     }
 
     @Override protected void onResume() { super.onResume(); main.post(refresh); }

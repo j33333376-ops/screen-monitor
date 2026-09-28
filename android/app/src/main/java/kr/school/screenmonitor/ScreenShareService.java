@@ -68,6 +68,8 @@ public class ScreenShareService extends Service {
         }
     }
     public static volatile State state = new State(false, "대기 중 · 아직 화면을 전송하지 않습니다.");
+    /** 교사 서버에 더 새로운 앱이 있으면 {버전, 받기 주소}. 앱 화면이 '새 버전 받기' 버튼으로 보여 준다. */
+    public static volatile String[] update = null;
     private HandlerThread thread;
     private Handler worker;
     private MediaProjection projection;
@@ -161,6 +163,11 @@ public class ScreenShareService extends Service {
 
     @Override public void onCreate() {
         super.onCreate();
+        try {
+            android.content.pm.PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+            StudentProtocol.appVersion = info.versionName;
+            StudentProtocol.appBuild = Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode;
+        } catch (android.content.pm.PackageManager.NameNotFoundException ignored) { /* 버전 없이 접속한다. */ }
         thread = new HandlerThread("screen-share");
         thread.start();
         worker = new Handler(thread.getLooper());
@@ -317,6 +324,7 @@ public class ScreenShareService extends Service {
                         switch (msg.optString("t")) {
                             case "ok":
                                 registered = true; recording = msg.optBoolean("recording"); lastSent = 0;
+                                update = StudentProtocol.update(options.url, msg.optJSONObject("update"));
                                 configureCapture(msg);
                                 monitoringStatus(); break;
                             case "mode": full = msg.optBoolean("full"); lastSent = 0; break;

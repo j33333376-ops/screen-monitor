@@ -66,6 +66,13 @@ $signer = Join-Path $env:ANDROID_HOME 'build-tools\36.1.0\apksigner.bat'
 if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed.' }
 New-Item -ItemType Directory -Force -Path (Split-Path $output) | Out-Null
 Copy-Item -LiteralPath $candidate -Destination $output -Force
+# The teacher server compares connecting apps with this file to offer "new version" prompts.
+$gradle = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'app\build.gradle') -Raw
+$versionCode = [regex]::Match($gradle, 'versionCode\s+(\d+)').Groups[1].Value
+$versionName = [regex]::Match($gradle, "versionName\s+'(\d+(\.\d+){0,3})'").Groups[1].Value
+if (-not $versionCode -or -not $versionName) { throw 'versionCode/versionName not found in app/build.gradle.' }
+[System.IO.File]::WriteAllText((Join-Path (Split-Path $output) 'version.json'),
+    "{`"version`": `"$versionName`", `"build`": $versionCode}`n", [System.Text.UTF8Encoding]::new($false))
 $hash = (Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash.ToLowerInvariant()
 [System.IO.File]::WriteAllText("$output.sha256", "$hash  학생화면전송.apk`n", [System.Text.UTF8Encoding]::new($false))
 Write-Host "APK ready: $output"

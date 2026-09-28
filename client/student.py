@@ -13,12 +13,15 @@
 
 개인정보 원칙:
   - 화면은 파일로 저장하지 않는다.
+  - 다음 실행 때 다시 입력하지 않도록 서버 주소·학년·반·번호·이름만 이 PC 사용자 폴더
+    (%APPDATA%\\ScreenMonitorStudent\\settings.json)에 저장한다. 수업 코드는 저장하지 않는다.
   - 항상 "모니터링 중" 상태가 창에 보인다. 창을 숨겨도 트레이 아이콘의 색과 설명에 남는다.
   - 자동 실행/자동 시작 없음. 학생이 직접 실행하고 코드를 입력해야만 동작한다.
 
 배포 시에는 백신 오탐이 적은 C#(.NET)으로 다시 만드는 것을 권장. 이 파일은 동작 검증용.
 """
 import io
+import os
 import re
 import time
 import json
@@ -38,8 +41,12 @@ from PIL import Image, ImageDraw
 import websocket  # websocket-client
 
 # ---- 설정 ----
+# 교사 서버가 이 번호로 새 버전 여부를 판단한다. 올릴 때 build-exe.ps1이 dist/version.json에 같은 값을 적는다.
+APP_VERSION = "1.5.0"
 # 서버 주소는 실행 창에서 입력한다. 아래는 입력칸 기본값.
 DEFAULT_SERVER = ""   # 배포 시 도메인(wss)으로 교체
+# 다음 수업에 다시 입력하지 않도록 기억하는 칸. 수업 코드는 수업마다 바뀌므로 기억하지 않는다(Android 앱과 같음).
+SETTINGS_KEYS = ("server", "grade", "cls", "num", "name")
 THUMB_W = 480          # 평상시 가로 픽셀
 THUMB_INTERVAL = 2.0   # 초
 THUMB_QUALITY = 45
@@ -87,6 +94,53 @@ def capture_packet(image, request_id):
     return bytes([KIND_CAPTURE]) + request_id.to_bytes(4, "big") + output.getvalue()
 
 
+def settings_path():
+    """이 PC 사용자 폴더에만 저장한다(%APPDATA%\\ScreenMonitorStudent). 테스트는 환경 변수로 바꾼다."""
+    override = os.environ.get("SCREEN_MONITOR_SETTINGS")
+    if override:
+        return override
+    base = os.environ.get("APPDATA") or os.path.expanduser("~")
+    return os.path.join(base, "ScreenMonitorStudent", "settings.json")
+
+
+def load_settings():
+    try:
+        with open(settings_path(), encoding="utf-8") as file:
+            data = json.load(file)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {key: str(data[key])[:200] for key in SETTINGS_KEYS if isinstance(data.get(key), (str, int))}
+
+
+def save_settings(values):
+    """저장에 실패해도 전송은 그대로 한다(다음에 다시 입력하면 될 뿐이다)."""
+    path = settings_path()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        temp = path + ".tmp"
+        with open(temp, "w", encoding="utf-8") as file:
+            json.dump({key: values[key] for key in SETTINGS_KEYS if key in values}, file, ensure_ascii=False)
+        os.replace(temp, path)
+    except OSError:
+        pass
+
+
+def update_url(ws_url, update):
+    """교사 서버가 알려 준 새 버전 받기 주소. 같은 서버의 /download/ 아래만 허용한다."""
+    if not isinstance(update, dict):
+        return None, None
+    version, path = update.get("version"), update.get("url")
+    if not (isinstance(version, str) and re.fullmatch(r"\d+(\.\d+){0,3}", version)):
+        return None, None
+    if not (isinstance(path, str) and re.fullmatch(r"/download/[a-z]+", path)):
+        return None, None
+    parts = urlsplit(ws_url)
+    scheme = "https" if parts.scheme == "wss" else "http"
+    return version, urlunsplit((scheme, parts.netloc, path, "", ""))
+
+
 def server_url(value):
     value = value.strip()
     if "://" not in value:
@@ -132,6 +186,7 @@ class Sender:
     def start(self, server, code, grade, cls, num, name):
         self.url = server_url(server)
         self.hello = dict(t="hello", code=code, grade=grade, cls=cls, num=num, name=name,
+                          platform="windows", version=APP_VERSION,
                           highCapture=True, notice=True, help=False, resumeKey=uuid.uuid4().hex)
         self.running = True
         self.thread = threading.Thread(target=self._run, daemon=True)
@@ -179,6 +234,9 @@ class Sender:
             self.capture_quality = msg.get("captureQuality", "standard")
             self.registered = True
             self.monitoring_status()
+            version, url = update_url(self.url, msg.get("update"))
+            if url:
+                self.ui.update_available(self, version, url)
         elif kind == "mode":
             self.full = bool(msg.get("full"))
         elif kind == "recording":
@@ -430,8 +488,8 @@ class Tray:
 class App:
     def __init__(self, root, tray_factory=Tray):
         self.root = root
-        root.title("학생 화면 전송 (시제품)")
-        root.geometry("440x600")
+        root.title(f"학생 화면 전송 {APP_VERSION}")
+        root.geometry("440x680")
         root.resizable(False, False)
         self.sender = None
         self.events = queue.Queue()
@@ -459,7 +517,17 @@ class App:
             if default:
                 e.insert(0, default)
             self.entries[key] = e
-        self.entries["server"].parts[3].focus_set()
+        # 지난번 입력을 되살린다. 그러면 보통은 수업 코드만 넣고 전송 시작을 누르면 된다.
+        saved = load_settings()
+        if saved.get("server"):
+            self.entries["server"].set(saved["server"])
+        for key in ("grade", "cls", "num", "name"):
+            if saved.get(key):
+                self.entries[key].insert(0, saved[key])
+        if saved.get("server"):
+            self.entries["code"].focus_set()
+        else:
+            self.entries["server"].parts[3].focus_set()
 
         self.btn = ttk.Button(frm, text="전송 시작", command=self.toggle)
         self.btn.pack(fill="x", pady=(12, 6))
@@ -472,6 +540,13 @@ class App:
         self.status = tk.Label(frm, text="대기 중", fg="#555",
                                wraplength=320, justify="left")
         self.status.pack(fill="x", pady=(4, 0))
+
+        # 교사 서버에 더 새로운 앱이 있을 때만 보인다. 누르면 브라우저가 교사 노트북에서 새 파일을 받는다.
+        self.update_url = None
+        self.update_notified = False
+        self.update_btn = tk.Button(frm, command=self.open_update, relief="ridge", bd=1,
+                                    bg="#ede9fe", fg="#5b21b6", activebackground="#ddd6fe")
+        self.update_hint = tk.Label(frm, fg="#5b21b6", wraplength=380, justify="left", font=("", 8))
 
         # Label 이 아니라 Text 라야 주소 부분만 눌러서 열 수 있다.
         self.notice_box = tk.Text(frm, height=3, wrap="word", bg="#fff4e1", fg="#8a4b08",
@@ -567,6 +642,28 @@ class App:
         except tk.TclError:
             pass
 
+    def show_update(self, version, url):
+        self.update_url = url
+        self.update_btn.config(text=f"⬆ 새 버전 {version}이 있습니다 · 받기")
+        self.update_hint.config(text="받은 파일을 실행하기 전에 작업 표시줄 오른쪽 끝 트레이 아이콘을 우클릭해 "
+                                     "'종료'로 이 프로그램을 끝내세요. 받은 파일 이름이 '학생화면전송 (1).exe'처럼 "
+                                     "바뀔 수 있으니, 다음부터는 새로 받은 파일을 실행하세요.")
+        if not self.update_btn.winfo_ismapped():
+            self.update_btn.pack(fill="x", pady=(10, 0), after=self.status)
+            self.update_hint.pack(fill="x", pady=(4, 0), after=self.update_btn)
+        # 수업 중 창을 앞으로 띄우지는 않는다. 트레이 풍선으로 한 번만 알린다.
+        if not self.update_notified:
+            self.update_notified = True
+            self.tray.notify(f"학생 화면 전송 새 버전 {version}이 있습니다. 창을 열어 '받기'를 누르세요.")
+
+    def open_update(self):
+        if not self.update_url:
+            return
+        try:
+            webbrowser.open(self.update_url)
+        except Exception:
+            self.set_status("브라우저를 열지 못했습니다. 선생님께 새 버전 파일을 받아 주세요.", ok=False)
+
     def toggle(self):
         if self.active:
             self.sender.stop()
@@ -595,6 +692,7 @@ class App:
         except ValueError as error:
             self.set_status(str(error), ok=False)
             return
+        save_settings(vals)
         self.sender = Sender(self)
         self.active = True
         self.btn.config(text="전송 중지")
@@ -632,6 +730,9 @@ class App:
     def help_changed(self, source):
         self.events.put(("help", source, None, None))
 
+    def update_available(self, source, version, url):
+        self.events.put(("update", source, version, url))
+
     def poll_events(self):
         # Workers never call Tk, including root.after(), which is not safe during shutdown.
         while not self.events.empty():
@@ -649,6 +750,8 @@ class App:
                 self.show_notice(text)
             elif kind == "help":
                 self.render_help()
+            elif kind == "update":
+                self.show_update(text, ok)   # (version, url)
             else:
                 color = "#2fae66" if ok else ("#e04545" if ok is False else "#555")
                 self.status.config(text=text, fg=color)
