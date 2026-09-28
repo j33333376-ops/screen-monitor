@@ -79,6 +79,22 @@ header .save-btn:hover { filter: brightness(0.97); }
 .setting-fields { display: grid; gap: 14px; margin-top: 24px; }
 .setting-fields label { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; }
 .setting-fields select, .setting-fields input { width: 210px; max-width: 65%; }
+.join-box { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.join-title { font-size: 13px; color: #526078; margin: 0 0 8px; text-align: left; }
+.card .join-box .lesson-input { margin: 0 0 10px; }
+.card .join-box button { width: 100%; }
+.teacher-count { font-size: 12px; color: #1f4fa8; background: #e8f0ff; border-radius: 12px; padding: 4px 10px; }
+.tablet-info { margin-top: 20px; padding: 12px 14px; background: #f4f7fc; border: 1px solid var(--line); border-radius: 10px; }
+.tablet-info h3 { margin: 0 0 6px; font-size: 14px; }
+.tablet-lead { margin: 0 0 10px; font-size: 13px; color: #526078; }
+#pairBtn { font-size: 13px; padding: 8px 12px; margin-bottom: 12px; }
+#pairDialog { width: 380px; text-align: center; }
+.pair-warning { margin: 0 0 12px; padding: 8px 10px; font-size: 13px; color: #8a4b08; background: #fff0d6; border-radius: 8px; }
+.pair-qr { display: block; width: 280px; height: 280px; margin: 0 auto; image-rendering: pixelated; }
+.pair-status { margin: 12px 0 4px; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pair-url { margin: 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+#tabletInfo { margin: 0; font-size: 13px; color: #334; line-height: 1.7; overflow-wrap: anywhere; }
+#tabletInfo b { color: var(--accent); }
 .settings-actions { display: flex; align-items: center; gap: 18px; margin-top: 20px; }
 .settings-actions button { font-size: 13px; }
 .floating-panel { position: fixed; top: 70px; right: 16px; z-index: 8; width: 360px;

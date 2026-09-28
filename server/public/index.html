@@ -27,6 +27,12 @@
       <option value="30" selected>30초마다 · 기본</option>
     </select>
     <button id="createBtn">수업 시작</button>
+    <div class="join-box">
+      <p class="join-title">태블릿 등 다른 기기에서 <b>진행 중인 수업</b> 열기</p>
+      <input id="joinCode" class="lesson-input" type="text" inputmode="numeric" maxlength="6" autocomplete="off"
+        placeholder="수업 코드 6자리 (수업이 하나면 비워도 됨)" aria-label="합류할 수업 코드">
+      <button id="joinBtn" class="secondary">진행 중인 수업 열기</button>
+    </div>
     <p id="loginMsg" class="err" role="status"></p>
     <a class="install-link" href="/student" target="_blank" rel="noopener">학생 앱 설치 안내</a>
   </div>
@@ -37,6 +43,7 @@
     <button id="connectionBtn" class="ghost code" title="누르면 IP 주소와 수업 코드를 별도 창에 표시합니다.">수업 코드 <b id="code">------</b> ↗</button>
     <div class="stat"><span id="onlineCount">0</span>명 접속</div>
     <span id="connectionStatus" role="status">연결 중…</span>
+    <span id="teacherCount" class="teacher-count hidden" role="status" title="이 수업을 열어 둔 교사 화면(노트북·태블릿) 수"></span>
     <button id="saveBtn" class="save-btn hidden" title=""></button>
     <div class="spacer"></div>
     <button id="helpBtn" class="ghost" aria-expanded="false" aria-controls="helpPanel" title="호출한 학생 목록 열기">✋ 호출 <span id="helpCount" role="status" aria-live="polite">0</span></button>
@@ -76,6 +83,12 @@
   <p id="saveNotice" role="status"></p>
   <p id="qualityNotice" role="status"></p>
   <p id="saveWarning" role="status"></p>
+  <section class="tablet-info" aria-labelledby="tabletTitle">
+    <h3 id="tabletTitle">태블릿에서 이 화면 열기 (선택)</h3>
+    <p class="tablet-lead">같은 Wi-Fi의 태블릿 카메라로 QR을 찍으면 이 교사 화면이 태블릿에 열립니다.</p>
+    <button id="pairBtn" class="ghost">📱 태블릿 연결 QR 보기</button>
+    <p id="tabletInfo">서버 주소를 확인하는 중…</p>
+  </section>
   <div class="settings-actions">
     <button id="msgBtn" class="ghost" title="학생 앱에 짧은 안내 문구를 보냅니다.">💬 전체 메시지</button>
     <a class="install-link" href="/student" target="_blank" rel="noopener">학생 앱 설치</a>
@@ -107,6 +120,14 @@
     <button id="cancelEnd" class="secondary">취소</button>
     <button id="confirmEnd" class="danger">종료하기</button>
   </div>
+</dialog>
+<dialog id="pairDialog" aria-labelledby="pairTitle">
+  <div class="panel-heading"><h2 id="pairTitle">태블릿 연결 QR</h2><button id="pairClose" class="secondary">닫기</button></div>
+  <p class="pair-warning">⚠ 학생에게 보이지 않게 프로젝터 화면을 잠시 가린 뒤 찍으세요.</p>
+  <img id="pairQr" class="pair-qr hidden" alt="태블릿 연결용 QR 코드">
+  <p id="pairStatus" class="pair-status" role="status">QR을 만드는 중…</p>
+  <p id="pairUrl" class="pair-url"></p>
+  <div class="dialog-actions"><button id="pairRenew" class="secondary hidden">새 QR 만들기</button></div>
 </dialog>
 <dialog id="msgDialog" aria-labelledby="msgTitle">
   <h2 id="msgTitle">메시지 보내기</h2>

@@ -57,7 +57,84 @@ $('lessonTitle').addEventListener('keydown', event => {
   if (event.key === 'Enter' && !event.isComposing) $('lessonTitleBtn').click();
 });
 
+// QR을 못 쓸 때 태블릿에서 직접 주소를 입력해 여는 방법을 수업 설정 창에 적어 둔다.
+function updateTabletInfo() {
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+  const first = (classConnection.addresses || [])[0];
+  const host = !local ? location.host : first ? `${first.ip}:${classConnection.port}` : '';
+  $('tabletInfo').textContent = host
+    ? `QR이 안 되면: 태블릿 브라우저에서 http://${host} 접속 → 교사 비밀번호와 수업 코드 ${code || '------'} 입력 → '진행 중인 수업 열기'. 노트북 창을 닫아도 태블릿에서 수업이 계속됩니다.`
+    : '이 PC의 네트워크 주소를 찾지 못했습니다. Wi-Fi 연결을 확인하세요.';
+}
+
+// ---------- 태블릿 연결 QR ----------
+// QR 안의 열쇠는 한 번 쓰면 사라지고 2분 뒤 만료된다(서버가 판정). 여기서는 남은 시간만 보여 준다.
+let pairTimer = null, pairExpiresAt = 0;
+function stopPairCountdown() { clearInterval(pairTimer); pairTimer = null; }
+function hidePairQr() {
+  $('pairQr').classList.add('hidden');
+  $('pairQr').removeAttribute('src');
+  $('pairUrl').textContent = '';
+}
+function openPairDialog() {
+  $('settingsDialog').close();
+  stopPairCountdown();
+  hidePairQr();
+  $('pairRenew').classList.add('hidden');
+  $('pairStatus').textContent = 'QR을 만드는 중…';
+  if (!$('pairDialog').open) $('pairDialog').showModal();
+  if (!send({ t: 'pairStart' })) {
+    $('pairStatus').textContent = '서버 연결이 끊겨 QR을 만들지 못했습니다.';
+    $('pairRenew').classList.remove('hidden');
+  }
+}
+function showPairQr(msg) {
+  if (!$('pairDialog').open) return;
+  if (!msg.svg) {
+    $('pairStatus').textContent = '이 PC의 네트워크 주소를 찾지 못했습니다. Wi-Fi 연결을 확인하세요.';
+    $('pairRenew').classList.remove('hidden');
+    return;
+  }
+  $('pairQr').src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(msg.svg);
+  $('pairQr').classList.remove('hidden');
+  // 열쇠(# 뒤)는 글자로 보여 주지 않는다.
+  $('pairUrl').textContent = `태블릿 주소: ${msg.url.split('#')[0]}`;
+  $('pairRenew').classList.add('hidden');
+  pairExpiresAt = Date.now() + msg.ttlSec * 1000;
+  stopPairCountdown();
+  tickPair();
+  pairTimer = setInterval(tickPair, 1000);
+}
+function tickPair() {
+  const left = Math.ceil((pairExpiresAt - Date.now()) / 1000);
+  if (left <= 0) {
+    stopPairCountdown();
+    hidePairQr();
+    $('pairStatus').textContent = 'QR이 만료되었습니다.';
+    $('pairRenew').classList.remove('hidden');
+    return;
+  }
+  $('pairStatus').textContent = `남은 시간 ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} · 한 번 찍으면 사라집니다`;
+}
+function pairedDone() {
+  stopPairCountdown();
+  hidePairQr();
+  $('pairRenew').classList.add('hidden');
+  $('pairStatus').textContent = '✅ 태블릿이 연결되었습니다.';
+  setTimeout(() => $('pairDialog').close(), 1500);
+}
+$('pairBtn').onclick = openPairDialog;
+$('pairRenew').onclick = openPairDialog;
+$('pairClose').onclick = () => $('pairDialog').close();
+// 닫기·Esc 어느 쪽이든 남은 QR 열쇠를 바로 없앤다.
+$('pairDialog').addEventListener('close', () => {
+  stopPairCountdown();
+  hidePairQr();
+  send({ t: 'pairCancel' });
+});
+
 function publishConnectionInfo() {
+  updateTabletInfo();
   if (connectionWindow && !connectionWindow.closed) {
     connectionWindow.postMessage({ t: 'classConnection', code: code || '', connected,
       connection: classConnection }, location.origin);
@@ -124,14 +201,26 @@ function resetSession(message) {
   $('endDialog').close();
   $('msgDialog').close();
   $('settingsDialog').close();
+  $('pairDialog').close();
   setHelpPanel(false);
   clearCredentials();
   for (const id of [...tiles.keys()]) removeTile(id);
   $('main').classList.add('hidden');
   $('login').classList.remove('hidden');
   $('loginMsg').textContent = message;
-  $('createBtn').disabled = false;
+  showTeacherCount(1);
+  setLoginBusy(false);
   if (ws) ws.close();
+}
+
+function setLoginBusy(busy) {
+  $('createBtn').disabled = busy;
+  $('joinBtn').disabled = busy;
+}
+
+function showTeacherCount(count) {
+  $('teacherCount').textContent = `교사 화면 ${count}대`;
+  $('teacherCount').classList.toggle('hidden', !(count > 1));
 }
 
 function connect(onOpen) {
@@ -154,7 +243,7 @@ function connect(onOpen) {
     if (code && token) {
       reconnectTimer = setTimeout(() => connect(s => s.send(JSON.stringify({ t: 'resume', code, token }))), 1500);
     } else {
-      $('createBtn').disabled = false;
+      setLoginBusy(false);
       if (!$('loginMsg').textContent) $('loginMsg').textContent = '서버에 연결할 수 없습니다. 서버 실행 여부를 확인하세요.';
     }
   };
@@ -164,7 +253,7 @@ $('createBtn').onclick = () => {
   const password = $('password').value;
   if (!password) return;
   if ($('createBtn').disabled) return;
-  $('createBtn').disabled = true;
+  setLoginBusy(true);
   $('loginMsg').textContent = '';
   const quality = $('initialQuality').value;
   const interval = Number($('initialInterval').value);
@@ -172,6 +261,18 @@ $('createBtn').onclick = () => {
   connect(s => s.send(JSON.stringify({ t: 'create', password, quality, interval, lessonTitle })));
 };
 $('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('createBtn').click(); });
+
+// 노트북에서 이미 시작한 수업을 태블릿 등 다른 기기에서 교사 화면으로 연다.
+$('joinBtn').onclick = () => {
+  const password = $('password').value;
+  if (!password) { $('loginMsg').textContent = '위 칸에 교사 비밀번호를 입력하세요.'; $('password').focus(); return; }
+  if ($('joinBtn').disabled) return;
+  setLoginBusy(true);
+  $('loginMsg').textContent = '';
+  const joinCode = $('joinCode').value.replace(/\D/g, '');
+  connect(s => s.send(JSON.stringify({ t: 'attach', password, code: joinCode })));
+};
+$('joinCode').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) $('joinBtn').click(); });
 
 $('endBtn').onclick = () => {
   setHelpPanel(false);
@@ -242,6 +343,9 @@ function onMessage(ev) {
       classConnection = msg.connection;
       publishConnectionInfo();
       break;
+    case 'teachers': showTeacherCount(msg.count); break;
+    case 'pairQr': showPairQr(msg); break;
+    case 'paired': pairedDone(); break;
     case 'lessonTitle': receiveLessonTitle(msg.lessonTitle); break;
     case 'saveState': savePending = false; showSaveInfo(msg.save); break;
     case 'messageSent': showMessageResult(msg); break;
@@ -290,7 +394,7 @@ function onMessage(ev) {
         $('settingsBtn').title = msg.msg;
       } else {
         $('loginMsg').textContent = msg.msg;
-        $('createBtn').disabled = false;
+        setLoginBusy(false);
         ws.close();
       }
       break;
@@ -699,8 +803,21 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') checkConnectionAfterWake();
 });
 
-// 새로고침 시 세션 복구
+// 태블릿이 노트북의 QR을 찍어 열었으면 그 수업에 바로 연결한다. 아니면 새로고침 시 세션 복구.
+const PAIR_HASH = /^#pair=(\d{6})\.([a-f0-9]{36})$/;
+// 이미 이 페이지가 열린 탭으로 QR을 열면 브라우저가 # 뒤만 바꾸고 다시 읽지 않으므로 직접 새로 읽는다.
+window.addEventListener('hashchange', () => { if (PAIR_HASH.test(location.hash)) location.reload(); });
 (function () {
+  const pair = PAIR_HASH.exec(location.hash || '');
+  if (pair) {
+    // 열쇠가 주소창·방문 기록에 남지 않게 지운다(한 번 쓰면 어차피 무효).
+    try { history.replaceState(null, '', location.pathname + location.search); } catch { /* 지우지 못해도 연결은 진행 */ }
+    clearCredentials();
+    setLoginBusy(true);
+    $('loginMsg').textContent = '태블릿을 수업에 연결하는 중…';
+    connect(s => s.send(JSON.stringify({ t: 'pair', code: pair[1], token: pair[2] })));
+    return;
+  }
   const c = sessionStorage.getItem('sm_code'), tk = sessionStorage.getItem('sm_token');
-  if (c && tk) { code = c; token = tk; $('createBtn').disabled = true; connect(s => s.send(JSON.stringify({ t: 'resume', code, token }))); }
+  if (c && tk) { code = c; token = tk; setLoginBusy(true); connect(s => s.send(JSON.stringify({ t: 'resume', code, token }))); }
 })();

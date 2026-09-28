@@ -11,6 +11,7 @@ const { createHistory } = require('./history');
 const { createCaptureRequests } = require('./capture-requests');
 const { normalizeLessonTitle } = require('./lesson-title');
 const { readWifi } = require('./wifi-info');
+const QRCode = require('qrcode');
 
 function updateLessonTitle(session, value) {
   if (session.savePromise || session.saveBatch || session.ending) return false;
@@ -233,6 +234,68 @@ function clean(str, max) {
   return String(str ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, max);
 }
 
+// 비밀번호만 알면 진행 중인 수업 화면을 볼 수 있으므로, 기기(IP)별로 연속 실패를 막는다.
+// 연결을 새로 열어도 초기화되지 않게 소켓이 아니라 주소 기준으로 센다.
+const AUTH_LIMIT = 10, AUTH_LOCK_MS = 5 * 60 * 1000;
+const authFailures = new Map(); // ip -> { count, since }
+function authLocked(ip) {
+  const entry = authFailures.get(ip);
+  if (entry && Date.now() - entry.since > AUTH_LOCK_MS) authFailures.delete(ip);
+  return (authFailures.get(ip)?.count || 0) >= AUTH_LIMIT;
+}
+function recordAuthFailure(ws) {
+  const entry = authFailures.get(ws.ip) || { count: 0, since: Date.now() };
+  entry.count++;
+  authFailures.set(ws.ip, entry);
+  if (++ws.authFailures >= 5) ws.close(1008, 'too many attempts');
+}
+function sendLocked(ws) {
+  send(ws, { t: 'error', msg: '비밀번호나 QR을 여러 번 잘못 넣어 이 기기에서 5분간 로그인이 잠겼습니다.' });
+}
+function checkTeacherPassword(ws, password) {
+  if (authLocked(ws.ip)) { sendLocked(ws); return false; }
+  if (password === TEACHER_PASSWORD) { authFailures.delete(ws.ip); return true; }
+  send(ws, { t: 'error', msg: '비밀번호가 틀렸습니다.' });
+  recordAuthFailure(ws);
+  return false;
+}
+
+// ---- 태블릿 연결 QR ----
+// 노트북 화면은 프로젝터로 학생에게 보일 수 있으므로, QR 안의 열쇠는 한 번만 쓰이고 2분 뒤 사라진다.
+// 열쇠는 주소의 # 뒤에 넣어 서버 요청 기록·브라우저 전송에 남지 않게 한다.
+const PAIR_TTL_MS = 2 * 60 * 1000;
+function sameSecret(a, b) {
+  const x = Buffer.from(String(a)), y = Buffer.from(String(b));
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+async function startPairing(ws, session) {
+  const token = crypto.randomBytes(18).toString('hex');
+  const expiresAt = Date.now() + PAIR_TTL_MS;
+  session.pairing = { token, expiresAt };
+  const { addresses, port } = connectionInfo();
+  const url = addresses.length ? `http://${addresses[0].ip}:${port}/#pair=${session.code}.${token}` : null;
+  const svg = url ? await QRCode.toString(url, { type: 'svg', margin: 2, errorCorrectionLevel: 'M' }) : null;
+  // QR을 만드는 사이 새 QR 요청이나 태블릿 연결로 바뀌었다면 옛 QR은 보내지 않는다.
+  if (session.pairing?.token !== token) return;
+  send(ws, { t: 'pairQr', url, svg, expiresAt, ttlSec: PAIR_TTL_MS / 1000 });
+}
+
+// 노트북·태블릿 등 이 수업을 연 교사 화면 수를 모든 교사 화면에 알린다.
+function broadcastTeachers(session) {
+  toTeachers(session, JSON.stringify({ t: 'teachers', count: session.teachers.size }), false);
+}
+
+// 새로고침한 창(resume)과 다른 기기에서 합류한 창(attach)을 같은 방식으로 붙인다.
+function addTeacher(ws, session) {
+  session.teachers.add(ws); session.teacherlessSince = null;
+  ws.role = 'teacher'; ws.code = session.code;
+  send(ws, { t: 'resumed', code: session.code, token: session.token, lessonTitle: session.lessonTitle, connection: connectionInfo(), ending: !!session.ending, students: [...session.students.values()].map(studentInfo), save: recorder.info(session) });
+  for (const st of session.students.values()) {
+    if (st.lastThumb) ws.send(frameMessage(KIND_THUMB, st.id, st.lastThumb), { binary: true });
+  }
+  broadcastTeachers(session);
+}
+
 // ---------- WebSocket ----------
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 8 * 1024 * 1024 });
 
@@ -248,6 +311,7 @@ wss.on('connection', (ws, req) => {
   ws.on('pong', () => { ws.isAlive = true; });
   ws.role = null;
   ws.authFailures = 0;
+  ws.ip = req.socket.remoteAddress || '';
   ws.connectedAt = Date.now();
 
   ws.on('message', (data, isBinary) => {
@@ -301,18 +365,14 @@ wss.on('connection', (ws, req) => {
       }
       return;
     }
-    if (['create', 'resume', 'hello'].includes(msg.t) && ws.role) {
+    if (['create', 'resume', 'attach', 'pair', 'hello'].includes(msg.t) && ws.role) {
       return send(ws, { t: 'error', msg: '이미 등록된 연결입니다.' });
     }
     if (shuttingDown && !ws.role) { ws.close(1012, 'server shutdown'); return; }
 
     // ----- 교사 -----
     if (msg.t === 'create') {
-      if (msg.password !== TEACHER_PASSWORD) {
-        send(ws, { t: 'error', msg: '비밀번호가 틀렸습니다.' });
-        if (++ws.authFailures >= 5) ws.close(1008, 'too many attempts');
-        return;
-      }
+      if (!checkTeacherPassword(ws, msg.password)) return;
       const session = {
         code: newCode(), token: crypto.randomBytes(24).toString('hex'),
         teachers: new Set([ws]), students: new Map(), nextId: 1, teacherlessSince: null,
@@ -324,18 +384,45 @@ wss.on('connection', (ws, req) => {
       if (SAVE_DEFAULT_ON) recorder.start(session);
       ws.role = 'teacher'; ws.code = session.code;
       send(ws, { t: 'created', code: session.code, token: session.token, lessonTitle: session.lessonTitle, connection: connectionInfo(), save: recorder.info(session) });
+      broadcastTeachers(session);
       console.log(`[세션 생성] ${session.code}`);
       return;
     }
     if (msg.t === 'resume') {
       const session = sessions.get(String(msg.code));
       if (!session || session.token !== msg.token) return send(ws, { t: 'error', msg: '세션이 없거나 종료되었습니다.', resumeFailed: true });
-      session.teachers.add(ws); session.teacherlessSince = null;
-      ws.role = 'teacher'; ws.code = session.code;
-      send(ws, { t: 'resumed', code: session.code, token: session.token, lessonTitle: session.lessonTitle, connection: connectionInfo(), ending: !!session.ending, students: [...session.students.values()].map(studentInfo), save: recorder.info(session) });
-      for (const st of session.students.values()) {
-        if (st.lastThumb) ws.send(frameMessage(KIND_THUMB, st.id, st.lastThumb), { binary: true });
+      addTeacher(ws, session);
+      return;
+    }
+    // 태블릿 등 다른 기기에서 진행 중인 수업에 교사 화면으로 합류한다.
+    // 수업이 하나뿐이면 코드 없이도 들어가고, 여러 개면 코드로 고른다.
+    if (msg.t === 'attach') {
+      if (!checkTeacherPassword(ws, msg.password)) return;
+      const wanted = clean(msg.code, 10);
+      const open = [...sessions.values()].filter(s => !s.ending);
+      const session = wanted ? sessions.get(wanted) : (open.length === 1 ? open[0] : null);
+      if (!session || session.ending) {
+        return send(ws, { t: 'error', msg: wanted ? '진행 중인 수업을 찾지 못했습니다. 수업 코드를 확인하세요.'
+          : open.length ? '진행 중인 수업이 여러 개입니다. 수업 코드를 입력하세요.'
+            : '진행 중인 수업이 없습니다. 교사 노트북에서 먼저 수업을 시작하세요.' });
       }
+      addTeacher(ws, session);
+      console.log(`[교사 화면 합류] ${session.code} (${ws.ip}) · 교사 화면 ${session.teachers.size}대`);
+      return;
+    }
+    // 노트북이 띄운 QR을 태블릿이 찍어 들어온다. 열쇠는 한 번 쓰면 없어진다.
+    if (msg.t === 'pair') {
+      if (authLocked(ws.ip)) return sendLocked(ws);
+      const session = sessions.get(clean(msg.code, 10));
+      const pairing = session && session.pairing;
+      if (!session || session.ending || !pairing || Date.now() > pairing.expiresAt || !sameSecret(pairing.token, msg.token)) {
+        recordAuthFailure(ws);
+        return send(ws, { t: 'error', msg: 'QR 코드가 만료되었거나 이미 사용되었습니다. 노트북에서 새 QR을 만들어 다시 찍으세요.' });
+      }
+      session.pairing = null;
+      addTeacher(ws, session);
+      for (const t of session.teachers) if (t !== ws) send(t, { t: 'paired' });
+      console.log(`[태블릿 QR 연결] ${session.code} (${ws.ip}) · 교사 화면 ${session.teachers.size}대`);
       return;
     }
     if (ws.role === 'teacher') {
@@ -346,6 +433,11 @@ wss.on('connection', (ws, req) => {
         return;
       }
       if (msg.t === 'connectionInfo') return send(ws, { t: 'connectionInfo', connection: connectionInfo() });
+      if (msg.t === 'pairStart') {
+        startPairing(ws, session).catch(e => send(ws, { t: 'error', msg: `QR을 만들지 못했습니다: ${e.message}` }));
+        return;
+      }
+      if (msg.t === 'pairCancel') { session.pairing = null; return; }
       if (msg.t === 'focus') {
         if ([...session.students.values()].some(st => st.id === msg.id)) ws.focusId = msg.id;
         updateFocus(session);
@@ -475,6 +567,7 @@ wss.on('connection', (ws, req) => {
         session.teacherlessSince = Date.now();
       }
       updateFocus(session);
+      broadcastTeachers(session);
     } else if (ws.role === 'student') {
       const st = session.students.get(ws.key);
       if (st && st.ws === ws) {

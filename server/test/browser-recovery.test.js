@@ -18,9 +18,10 @@ function browser() {
   const element = () => ({ value: '', textContent: '', dataset: {}, style: {},
     classList: { add() {}, remove() {}, toggle() {} }, appendChild() {}, remove() {},
     addEventListener() {}, setAttribute() {}, removeAttribute() {}, close() {}, showModal() {}, focus() {} });
+  // (태블릿 QR 연결 이후) app.js는 location.hostname·hash도 읽는다.
   const context = vm.createContext({
     WebSocket: Socket, Date: { now: () => now },
-    location: { protocol: 'http:', host: 'localhost' },
+    location: { protocol: 'http:', host: 'localhost', hostname: 'localhost', hash: '' },
     sessionStorage: { getItem() { return null; }, setItem() {}, removeItem() {} },
     document: { getElementById(id) { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); },
       createElement: element, addEventListener() {}, documentElement: { style: { setProperty() {} } } },
