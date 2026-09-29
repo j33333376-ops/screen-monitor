@@ -225,7 +225,7 @@ footer{padding-block:36px 56px;border-top:1px solid var(--line);color:var(--mute
       <div class="sec-head">
         <p class="eyebrow">시작하기</p>
         <h2>수업 시작까지 화면 세 장</h2>
-        <p>교사 노트북에서 <code>서버시작.bat</code>을 실행하면 첫 화면이 열립니다. 계정 만들기도, 서버 임대도 없습니다.</p>
+        <p>설치 파일로 설치하고 <b>학생 화면 모니터</b>를 실행하면 트레이 아이콘이 생기고 이 화면이 열립니다. 계정 만들기도, 서버 임대도 없습니다.</p>
       </div>
       <div class="steps">
         <div class="step">
@@ -375,17 +375,19 @@ footer{padding-block:36px 56px;border-top:1px solid var(--line);color:var(--mute
         <p>항상 최신 버전을 받습니다. 학생 앱은 교사 노트북의 <code>/student</code> 설치 페이지에서도 받을 수 있습니다.</p>
       </div>
       <div class="dl">
-        <a class="main" href="https://github.com/j33333376-ops/screen-monitor/releases/latest/download/screen-monitor-teacher.zip"><span class="for">교사 노트북</span><span class="file">screen-monitor-teacher.zip</span><p>압축을 풀고 server/서버시작.bat 실행. node.exe가 들어 있어 설치가 필요 없습니다.</p><span class="go">내려받기 ↓</span></a>
+        <a class="main" href="https://github.com/j33333376-ops/screen-monitor/releases/latest/download/screen-monitor-teacher-setup.exe"><span class="for">교사 노트북</span><span class="file">screen-monitor-teacher-setup.exe</span><p>다음 → 설치. 관리자 권한 없이 설치되고 시작 메뉴에 '학생 화면 모니터'가 생깁니다.</p><span class="go">설치 파일 받기 ↓</span></a>
         <a href="https://github.com/j33333376-ops/screen-monitor/releases/latest/download/screen-monitor-student.exe"><span class="for">학생 Windows</span><span class="file">screen-monitor-student.exe</span><p>파일 하나로 실행합니다.</p><span class="go">내려받기 ↓</span></a>
         <a href="https://github.com/j33333376-ops/screen-monitor/releases/latest/download/screen-monitor-student.apk"><span class="for">학생 Android</span><span class="file">screen-monitor-student.apk</span><p>Android 8.0 이상 태블릿.</p><span class="go">내려받기 ↓</span></a>
       </div>
 
+      <p style="margin-top:16px;font-size:.9rem;color:var(--muted)">설치할 수 없는 노트북은 <a href="https://github.com/j33333376-ops/screen-monitor/releases/latest/download/screen-monitor-teacher.zip">휴대용 zip</a>을 받아 압축을 풀고 <code>학생화면모니터.exe</code>를 실행하세요.</p>
+
       <div class="faq">
-        <details><summary>처음 한 번 해야 하는 일이 있나요?</summary><p>교사 노트북 방화벽에서 TCP 8080 인바운드를 허용해야 합니다(관리자 권한 필요, 학교 정보부에 요청). 그리고 <code>서버시작.bat</code>의 기본 비밀번호 <code>teacher1234</code>를 꼭 바꾸세요.</p></details>
+        <details><summary>처음 한 번 해야 하는 일이 있나요?</summary><p>처음 실행할 때 교사 비밀번호와 PDF 저장 폴더를 정합니다. 학생이 접속하려면 교사 노트북 방화벽에서 TCP 8080을 허용해야 합니다. 관리자 권한으로 설치하면 설치 중에 함께 허용할 수 있고, 아니면 학교 정보부에 요청하세요.</p></details>
         <details><summary>실행하면 경고가 떠요.</summary><p>코드 서명이 없는 프로그램이라 SmartScreen이나 백신이 경고할 수 있습니다. <b>추가 정보 → 실행</b>으로 진행합니다. Android는 처음 한 번 '이 출처 허용'이 필요합니다.</p></details>
         <details><summary>옆 교실 Wi-Fi에 붙은 학생도 되나요?</summary><p>교사 노트북과 같은 네트워크여야 합니다. 접속 안내 창의 Wi-Fi에 연결하도록 안내하세요.</p></details>
         <details><summary>iPad나 크롬북은요?</summary><p>현재는 Windows PC와 Android 태블릿(8.0 이상)만 지원합니다.</p></details>
-        <details><summary>PDF가 저장되지 않을 수도 있나요?</summary><p>캡처는 수업 종료 전까지 교사 노트북 메모리에 있습니다. 교사 화면에서 <b>수업 종료</b>를 누르고 "PDF N개 저장 완료"를 확인한 뒤 서버 창을 닫으세요.</p></details>
+        <details><summary>PDF가 저장되지 않을 수도 있나요?</summary><p>트레이 아이콘의 <b>종료</b>를 누르면 진행 중인 수업을 끝내고 학생별 PDF 저장을 마친 뒤에 꺼집니다. 저장에 실패하면 끄지 않고 알려 줍니다. 다만 수업 중에 노트북 전원이 꺼지면 기록을 잃으니 절전되지 않게 해 두세요.</p></details>
       </div>
     </div>
   </section>
@@ -393,7 +395,7 @@ footer{padding-block:36px 56px;border-top:1px solid var(--line);color:var(--mute
 
 <footer>
   <div class="wrap" style="display:grid;gap:4px">
-    <p>학생 화면 실시간 모니터 · 학교 내부망용 시제품 · 학생 앱 1.5.0 · <a href="https://github.com/j33333376-ops/screen-monitor">사용 설명서(README)</a></p>
+    <p>학생 화면 실시간 모니터 · 학교 내부망용 시제품 · 교사용 2026.09.29 · 학생 앱 1.5.0 · <a href="https://github.com/j33333376-ops/screen-monitor">사용 설명서(README)</a></p>
     <p>화면 속 학생 이름은 예시이며, 학생 화면은 중1 수학 웹앱을 띄워 만든 시연 장면입니다.</p>
   </div>
 </footer>

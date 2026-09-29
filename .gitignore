@@ -17,6 +17,7 @@ server/node_modules/
 __pycache__/
 *.pyc
 client/build/
+teacher/build/
 *.spec
 android/.gradle/
 android/build/

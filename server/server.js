@@ -59,6 +59,7 @@ function positiveNumber(name, fallback, min, max) {
 }
 const PORT = positiveNumber('PORT', 8080, 0, 65535);
 const TEACHER_PASSWORD = process.env.TEACHER_PASSWORD || 'teacher1234';
+const CONTROL_STDIN = process.env.CONTROL_STDIN === '1';
 const TEACHERLESS_TIMEOUT_MS = 30 * 60 * 1000; // 교사가 모두 나간 뒤 30분 지나면 세션 자동 종료
 const MAX_TEACHER_BUFFER = 8 * 1024 * 1024;     // 교사 쪽 전송이 밀리면 프레임을 버린다
 
@@ -233,6 +234,7 @@ async function endSession(session, reason) {
     return;
   }
   sessions.delete(session.code);
+  reportLessons();
   for (const st of session.students.values()) {
     history.clearStudent(st);
     send(st.ws, { t: 'end', reason });
@@ -322,6 +324,8 @@ function addTeacher(ws, session) {
 
 // ---------- WebSocket ----------
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 8 * 1024 * 1024 });
+// 포트 사용 중 같은 시작 오류는 아래 server 'error'에서 안내한다. 여기서 다시 던지면 안내 없이 죽는다.
+wss.on('error', () => {});
 
 wss.on('connection', (ws, req) => {
   ws.on('error', (error) => console.warn('[연결 오류]', error.message));
@@ -405,6 +409,7 @@ wss.on('connection', (ws, req) => {
         lessonTitle: normalizeLessonTitle(msg.lessonTitle),
       };
       sessions.set(session.code, session);
+      reportLessons();
       if (SAVE_DEFAULT_ON) recorder.start(session);
       ws.role = 'teacher'; ws.code = session.code;
       send(ws, { t: 'created', code: session.code, token: session.token, lessonTitle: session.lessonTitle, connection: connectionInfo(), save: recorder.info(session) });
@@ -645,24 +650,46 @@ server.on('error', (error) => {
   console.error(error.code === 'EADDRINUSE'
     ? `[시작 실패] 포트 ${PORT}를 다른 프로그램이 사용 중입니다. 기존 서버를 확인하세요.`
     : `[서버 오류] ${error.message}`);
-  process.exit(1);
+  // Windows의 파이프 출력은 비동기라, 실행기가 이유를 읽도록 다 쓴 뒤에 끈다.
+  if (CONTROL_STDIN) process.stdout.write('@@' + JSON.stringify({ t: 'error', code: error.code || 'ERROR' }) + '\n', () => process.exit(1));
+  else process.exit(1);
 });
 let shuttingDown = false;
 async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
+  control({ t: 'shuttingDown', lessons: sessions.size });
   for (const session of sessions.values()) await endSession(session, '서버가 종료되었습니다.');
-  if (sessions.size) { shuttingDown = false; return; }
+  if (sessions.size) { shuttingDown = false; control({ t: 'shutdownFailed', lessons: sessions.size }); return; }
   for (const ws of wss.clients) ws.terminate();
   server.close(() => process.exit(0));
+  // 브라우저의 유휴 연결이 남아 close가 늦어져도 PDF는 이미 저장됐으므로 곧 끈다.
+  setTimeout(() => process.exit(0), 3000).unref();
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 // Windows에서 서버 창(콘솔)을 닫으면 SIGHUP이 온다. 모아 둔 캡처를 PDF로 저장하려고 시도한다(몇 초 안에 끝나야 함).
 process.on('SIGHUP', shutdown);
 
+// 교사용 실행기(트레이 앱)가 서버를 창 없이 띄울 때 쓰는 제어 통로(CONTROL_STDIN=1).
+// 표준 입력으로 'shutdown' 한 줄을 받으면 수업을 모두 끝내 PDF를 저장한 뒤 꺼진다.
+// 실행기가 먼저 죽어 입력이 끊겨도 같은 순서로 저장하고 끈다.
+// 상태는 '@@{json}' 한 줄로 표준 출력에 알린다(ready/lessons/shuttingDown/shutdownFailed/error).
+function control(event) {
+  if (CONTROL_STDIN) process.stdout.write('@@' + JSON.stringify(event) + '\n');
+}
+function reportLessons() {
+  control({ t: 'lessons', count: sessions.size });
+}
+if (CONTROL_STDIN) {
+  const lines = require('node:readline').createInterface({ input: process.stdin });
+  lines.on('line', line => { if (line.trim() === 'shutdown') void shutdown(); });
+  lines.on('close', () => void shutdown());
+}
+
 server.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   if (process.send) process.send({ port: server.address().port });
+  control({ t: 'ready', port: server.address().port });
   const ips = lanAddresses();
   const line = '='.repeat(52);
   console.log('\n' + line);
