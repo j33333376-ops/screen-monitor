@@ -156,6 +156,23 @@ details[open] summary::after{content:"−"}
 details p{padding-bottom:16px;color:var(--muted);font-size:.93rem}
 footer{padding-block:36px 56px;border-top:1px solid var(--line);color:var(--muted);font-size:.84rem;display:grid;gap:4px}
 
+/* 실제 수업 영상·결과물 */
+.video{max-width:960px;margin-inline:auto}
+.frame{position:relative;width:100%;border-radius:14px;overflow:hidden;background:#0B1210;box-shadow:var(--shadow)}
+.frame.wide{aspect-ratio:16/9}
+.frame.a4{aspect-ratio:210/297}
+.frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.frame .noembed{position:absolute;inset:0;display:grid;place-items:center;padding:20px;text-align:center;color:#C9D6D2;font-size:.9rem}
+.openlink{display:inline-flex;gap:6px;align-items:center;margin-top:10px;font-size:.88rem;font-weight:700;text-decoration:none}
+.real{margin-top:64px;padding-top:40px;border-top:1px solid rgba(255,255,255,.18)}
+.real-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:28px;align-items:start;margin-top:28px}
+.real-grid figure{margin:0;display:grid;gap:10px}
+.real-grid figcaption{font-size:.9rem;color:var(--board-muted)}
+.real-grid figcaption b{color:var(--board-ink);display:block;font-size:1rem;margin-bottom:2px}
+.pdfsec .openlink{color:var(--chalk)}
+.facts{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.facts span{font-family:var(--f-mono);font-size:.74rem;border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:2px 9px;color:var(--board-ink)}
+
 /* 라이트박스 */
 #lb{border:0;padding:0;background:transparent;max-width:96vw;max-height:94vh}
 #lb::backdrop{background:rgba(5,15,12,.86)}
@@ -171,6 +188,8 @@ footer{padding-block:36px 56px;border-top:1px solid var(--line);color:var(--mute
   .trust{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
   .dl{grid-template-columns:minmax(0,1fr)}
   .overlay-bar{position:static;width:100%;margin-top:12px}
+  .real-grid{grid-template-columns:minmax(0,1fr)}
+  .real-grid .frame.a4{max-width:520px}
 }
 @media (max-width:560px){
   .wrap{padding-inline:16px}
@@ -190,7 +209,7 @@ footer{padding-block:36px 56px;border-top:1px solid var(--line);color:var(--mute
   <div class="wrap">
     <div class="top">
       <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>학생 화면 실시간 모니터</div>
-      <nav aria-label="페이지 안 이동"><a href="#start">시작하기</a><a href="#features">기능</a><a href="#pdf">PDF·AI 평가</a><a href="#download">다운로드</a></nav>
+      <nav aria-label="페이지 안 이동"><a href="#video">영상</a><a href="#start">시작하기</a><a href="#features">기능</a><a href="#pdf">PDF·AI 평가</a><a href="#download">다운로드</a></nav>
     </div>
     <div class="hero-copy">
       <h1>우리 반 화면이<br><em>교사 노트북 한 대</em>에 다 보입니다</h1>
@@ -220,7 +239,23 @@ footer{padding-block:36px 56px;border-top:1px solid var(--line);color:var(--mute
 </header>
 
 <main>
-  <section id="start">
+  <section id="video">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">실제 수업 영상</p>
+        <h2>교사 화면을 그대로 녹화했습니다</h2>
+        <p>학생들이 노트북으로 수업하는 동안 교사 노트북에 보이는 화면입니다. 격자로 전체를 보다가 한 명을 확대하고, 지난 캡처를 넘겨 보는 흐름을 확인할 수 있습니다.</p>
+      </div>
+      <div class="video">
+        <div class="frame wide">
+          <iframe src="https://www.youtube.com/embed/7HzPnqCXQtY?rel=0" title="노트북 화면 실시간 모니터링 프로그램" loading="lazy" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        </div>
+        <a class="openlink" href="https://youtu.be/7HzPnqCXQtY" target="_blank" rel="noopener">YouTube에서 크게 보기 ↗</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="start" style="padding-top:0">
     <div class="wrap">
       <div class="sec-head">
         <p class="eyebrow">시작하기</p>
@@ -320,6 +355,24 @@ footer{padding-block:36px 56px;border-top:1px solid var(--line);color:var(--mute
         <span class="key"><b>삼각형의_합동_조건</b><small>수업명</small></span>_<span><b>1학년2반</b><small>학급</small></span>_<span><b>2026-09-29_151219</b><small>시작 시각</small></span>_<span><b>af9de2f7</b><small>구간</small></span>_<span class="key"><b>10207_김민수</b><small>학번·이름</small></span>_<span><b>1_AI고화질.pdf</b><small>화질</small></span>
       </div>
 
+      <div class="real">
+        <p class="eyebrow">실제 수업 결과물</p>
+        <h2 style="margin-top:10px">한 학생의 수업 한 차시가 PDF 한 권과 보고서가 되었습니다</h2>
+        <p style="color:var(--board-muted);margin-top:10px;max-width:720px">2026년 9월 23일 구월중 1학년 7반 알지오매스 수업(다각형의 외각의 합)에서 한 학생의 화면을 기록한 PDF와, 이 기록을 바탕으로 정리한 학생 활동 보고서입니다.</p>
+        <div class="real-grid">
+          <figure>
+            <div class="frame wide"><iframe src="https://drive.google.com/file/d/1Ap_7yuJIpVt1mJr-sr6k3R224qurUIEg/preview" title="학생 화면 캡처 PDF" loading="lazy" allow="autoplay"></iframe></div>
+            <figcaption><b>학생 화면 캡처 PDF</b>수업 접속부터 드론 탐구, 외각의 합 작도, 카메라 조리개 작도까지 시간 순서대로 담겼습니다.<span class="facts"><span>223쪽</span><span>1920×1080</span><span>10:50~11:35</span></span></figcaption>
+            <a class="openlink" href="https://drive.google.com/file/d/1Ap_7yuJIpVt1mJr-sr6k3R224qurUIEg/view" target="_blank" rel="noopener">새 창에서 PDF 열기 ↗</a>
+          </figure>
+          <figure>
+            <div class="frame a4"><iframe src="https://drive.google.com/file/d/1b6u1c01LEpPRfNcqKCtEBRRmX1-HANor/preview" title="학생 활동 보고서" loading="lazy" allow="autoplay"></iframe></div>
+            <figcaption><b>학생 활동 보고서</b>시간대별 활동 내역, 핵심 개념, 평가 영역별 성취 수준과 종합 의견까지 정리했습니다.<span class="facts"><span>4쪽</span><span>익명 처리</span></span></figcaption>
+            <a class="openlink" href="https://drive.google.com/file/d/1b6u1c01LEpPRfNcqKCtEBRRmX1-HANor/view" target="_blank" rel="noopener">새 창에서 보고서 열기 ↗</a>
+          </figure>
+        </div>
+      </div>
+
       <div class="gem">
         <div>
           <p class="eyebrow">Gemini Notebook으로 평가하기</p>
@@ -396,7 +449,7 @@ footer{padding-block:36px 56px;border-top:1px solid var(--line);color:var(--mute
 <footer>
   <div class="wrap" style="display:grid;gap:4px">
     <p>학생 화면 실시간 모니터 · 학교 내부망용 시제품 · 교사용 2026.09.29 · 학생 앱 1.5.0 · <a href="https://github.com/j33333376-ops/screen-monitor">사용 설명서(README)</a></p>
-    <p>화면 속 학생 이름은 예시이며, 학생 화면은 중1 수학 웹앱을 띄워 만든 시연 장면입니다.</p>
+    <p>기능 소개의 캡처 이미지는 중1 수학 웹앱을 띄워 만든 시연 장면이며 학생 이름은 예시입니다. 영상과 '실제 수업 결과물'은 실제 수업 기록입니다.</p>
   </div>
 </footer>
 
