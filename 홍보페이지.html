@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>학생 화면 실시간 모니터</title>
+<meta name="description" content="교사 노트북 한 대로 학생 화면을 실시간으로 보고, 수업 과정을 학생별 PDF로 남기는 교실용 프로그램">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 제품 상세 페이지 — 좁은 본문 칼럼 + 교사 화면 격자 목업을 히어로의 주인공으로, 아래로 '흐름 → 기능 → PDF·AI 평가 → 신뢰 → 다운로드' 순서 */
+:root{
+  --bg:#F5F7F6;          /* 칠판 지우개 먼지 같은 옅은 회청색 바탕 */
+  --surface:#FFFFFF;
+  --sunk:#E8EEEC;
+  --ink:#14211F;         /* 칠판 녹색 기운의 먹색 */
+  --muted:#56655F;
+  --line:#CFD9D5;
+  --accent:#0E6B5C;      /* 교실 칠판 녹색 */
+  --accent-ink:#FFFFFF;
+  --accent-soft:#DCEFEA;
+  --chalk:#F2C94C;       /* 분필 노랑: 강조 한 곳 */
+  --call:#E07A1F;        /* ✋ 호출 주황 (의미색) */
+  --live:#1E9E57;        /* 전송 중 초록 (의미색) */
+  --rec:#D2393C;         /* 기록 중 빨강 (의미색) */
+  --update:#7B4BC4;      /* 앱 업데이트 보라 (의미색) */
+  --screen:#0F1A18;
+  --ai-bg:#0E6B5C;--ai-fg:#FFFFFF;
+  --f-display:"Black Han Sans","Noto Sans KR",system-ui,sans-serif;
+  --f-body:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1513;--surface:#16201E;--sunk:#1C2926;--ink:#E6EEEB;--muted:#9AABA5;--line:#2A3935;
+  --accent:#4CC3A9;--accent-ink:#06201A;--accent-soft:#17332D;--chalk:#F2C94C;
+  --call:#F0913A;--live:#3CC479;--rec:#EF5B5E;--update:#A57EE6;--screen:#070C0B;--ai-bg:#12382F;--ai-fg:#E6F2EE;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1513;--surface:#16201E;--sunk:#1C2926;--ink:#E6EEEB;--muted:#9AABA5;--line:#2A3935;
+  --accent:#4CC3A9;--accent-ink:#06201A;--accent-soft:#17332D;--chalk:#F2C94C;
+  --call:#F0913A;--live:#3CC479;--rec:#EF5B5E;--update:#A57EE6;--screen:#070C0B;--ai-bg:#12382F;--ai-fg:#E6F2EE;color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.7;word-break:keep-all;overflow-wrap:anywhere;padding-inline:20px}
+.wrap{max-width:1080px;margin-inline:auto}
+h1,h2,h3{text-wrap:balance;line-height:1.25;margin:0}
+h2{font-family:var(--f-display);font-weight:400;font-size:clamp(1.7rem,3.6vw,2.4rem);letter-spacing:-.01em}
+h3{font-size:1.08rem;font-weight:700}
+p{margin:0}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible{outline:3px solid var(--chalk);outline-offset:3px;border-radius:6px}
+.eyebrow{font-size:.78rem;font-weight:700;letter-spacing:.14em;color:var(--accent);text-transform:uppercase}
+.mono{font-family:var(--f-mono)}
+section{padding-block:72px;border-top:1px solid var(--line)}
+.sec-head{display:grid;gap:12px;max-width:680px;margin-bottom:36px}
+.sec-head p{color:var(--muted)}
+
+/* 상단 바 */
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-block:18px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:900}
+.brand-mark{width:30px;height:30px;border-radius:8px;background:var(--accent);display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:6px}
+.brand-mark i{background:var(--accent-ink);border-radius:2px;opacity:.9}
+.brand-mark i:nth-child(4){background:var(--chalk);opacity:1}
+.top nav{display:flex;gap:18px;font-size:.92rem;flex-wrap:wrap}
+.top nav a{color:var(--muted);text-decoration:none}
+.top nav a:hover{color:var(--ink)}
+
+/* 히어로 */
+.hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:48px;align-items:center;padding-block:40px 72px}
+.hero h1{font-family:var(--f-display);font-weight:400;font-size:clamp(2.2rem,5.2vw,3.7rem);letter-spacing:-.015em}
+.hero h1 em{font-style:normal;background:linear-gradient(transparent 62%,var(--chalk) 62%, var(--chalk) 92%,transparent 92%);color:inherit;padding-inline:2px}
+.hero .lead{font-size:1.1rem;color:var(--muted);margin-top:20px;max-width:34em}
+.cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:13px 20px;border-radius:999px;font-weight:700;text-decoration:none;font-size:.98rem;border:1.5px solid var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{color:var(--accent);background:transparent}
+.price{display:flex;gap:18px;flex-wrap:wrap;margin-top:28px;font-size:.9rem;color:var(--muted)}
+.price b{display:block;font-family:var(--f-display);font-weight:400;font-size:1.6rem;color:var(--ink);line-height:1.2}
+
+/* 교사 화면 목업 */
+.device{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:0 30px 60px -30px rgba(10,40,34,.35);overflow:hidden;min-width:0}
+.bar{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);font-size:.74rem;flex-wrap:wrap;background:var(--sunk)}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;background:var(--surface);border:1px solid var(--line);white-space:nowrap}
+.chip.code{font-family:var(--f-mono);font-weight:500}
+.chip.rec{color:var(--rec);border-color:currentColor}
+.chip.rec::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--rec);animation:blink 1.4s infinite}
+.chip.call{color:var(--call);border-color:currentColor;font-weight:700}
+@keyframes blink{50%{opacity:.25}}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:12px}
+.tile{border-radius:8px;background:var(--screen);aspect-ratio:16/10.5;position:relative;overflow:hidden;border:2px solid transparent}
+.tile.called{border-color:var(--call)}
+.tile .lab{position:absolute;left:0;right:0;bottom:0;padding:3px 6px;font-size:.62rem;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.75));display:flex;justify-content:space-between;gap:4px}
+.tile .flag{position:absolute;top:4px;right:4px;font-size:.58rem;padding:1px 5px;border-radius:4px;color:#fff}
+.tile.called .flag{background:var(--call)}
+.tile.old .flag{background:var(--update)}
+.tile.off{opacity:.45}
+.tile svg{position:absolute;inset:0;width:100%;height:100%}
+.bar .spacer{flex:1}
+
+/* 제품 사양 줄 */
+.specs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.specs div{padding:20px 22px;border-left:1px solid var(--line);min-width:0}
+.specs div:first-child{border-left:0}
+.specs dt{font-size:.78rem;color:var(--muted);letter-spacing:.06em}
+.specs dd{margin:4px 0 0;font-weight:700;font-variant-numeric:tabular-nums}
+
+/* 수업 흐름 */
+.flow{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;counter-reset:s}
+.flow li{counter-increment:s;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px 18px;display:grid;gap:8px;align-content:start;min-width:0}
+.flow li::before{content:counter(s);font-family:var(--f-display);font-size:1.6rem;color:var(--accent);line-height:1}
+.flow li p{font-size:.9rem;color:var(--muted)}
+.flow .who{font-size:.72rem;font-weight:700;letter-spacing:.08em;color:var(--muted)}
+
+/* 기능 */
+.features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.feat{background:var(--surface);padding:26px 24px;display:grid;gap:8px;align-content:start;min-width:0}
+.feat p{color:var(--muted);font-size:.93rem}
+.feat .ic{width:36px;height:36px;border-radius:10px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
+.feat .ic svg{width:20px;height:20px}
+.tag{display:inline-block;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--sunk);color:var(--muted);margin-left:6px;vertical-align:2px}
+
+/* PDF × Gemini 섹션 — 페이지에서 가장 강조되는 곳 */
+.ai{background:var(--ai-bg);color:var(--ai-fg);border-radius:24px;padding:56px clamp(20px,5vw,56px);border:0;margin-block:24px}
+.ai .eyebrow{color:var(--chalk)}
+.ai .sec-head p{color:inherit;opacity:.85}
+.ai-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:40px;align-items:start}
+.pdfpage{background:#FCFCF9;color:#1A1A1A;border-radius:6px;padding:14px;box-shadow:0 20px 40px -20px rgba(0,0,0,.5);position:relative;max-width:420px}
+.pdfpage .shot{background:#0F1A18;border-radius:3px;aspect-ratio:16/10;position:relative;overflow:hidden}
+.pdfpage .shot svg{position:absolute;inset:0;width:100%;height:100%}
+.pdfpage .stamp{text-align:right;font-family:var(--f-mono);font-size:.72rem;color:#555;margin-top:6px}
+.pdfpage .pg{position:absolute;top:-12px;left:14px;background:var(--chalk);color:#1A1A1A;font-size:.72rem;font-weight:700;padding:2px 10px;border-radius:999px}
+.stack{position:relative;padding:18px 18px 0 0}
+.stack::before,.stack::after{content:"";position:absolute;inset:0 0 18px 18px;background:#E9EAE4;border-radius:6px;transform:translate(0,0);z-index:0;max-width:420px}
+.stack::after{inset:9px 9px 9px 9px;background:#F3F3EF}
+.stack .pdfpage{z-index:1}
+.fname{margin-top:28px;font-family:var(--f-mono);font-size:.82rem;display:flex;flex-wrap:wrap;gap:4px 2px;align-items:flex-end}
+.fname span{display:inline-flex;flex-direction:column;gap:3px}
+.fname b{font-weight:500;background:rgba(255,255,255,.14);padding:3px 5px;border-radius:4px}
+.fname small{font-family:var(--f-body);font-size:.68rem;opacity:.8;padding-left:2px}
+.ai-steps{list-style:none;margin:0;padding:0;display:grid;gap:14px;counter-reset:a}
+.ai-steps li{counter-increment:a;display:grid;grid-template-columns:34px minmax(0,1fr);gap:12px;align-items:start}
+.ai-steps li::before{content:counter(a);width:30px;height:30px;border-radius:50%;background:var(--chalk);color:#1A1A1A;display:grid;place-items:center;font-weight:900;font-size:.9rem}
+.ai-steps p{opacity:.85;font-size:.93rem}
+.prompts{margin-top:30px;display:grid;gap:10px}
+.prompts h3{margin-bottom:4px}
+.prompt{background:rgba(0,0,0,.18);border-radius:12px;padding:12px 16px;font-size:.93rem;display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px}
+.prompt i{font-style:normal;font-size:.72rem;font-weight:700;color:var(--chalk);white-space:nowrap;padding-top:2px}
+.ai-note{margin-top:28px;font-size:.84rem;opacity:.85;border-top:1px solid rgba(255,255,255,.25);padding-top:16px;display:grid;gap:6px}
+
+/* 신뢰 */
+.trust{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 48px}
+.trust li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:12px}
+.trust ul{list-style:none;margin:0;padding:0;display:grid;gap:18px}
+.trust .dot{width:14px;height:14px;border-radius:50%;margin-top:6px;background:var(--live);box-shadow:0 0 0 4px var(--accent-soft)}
+.trust li p{color:var(--muted);font-size:.93rem}
+
+/* 준비물·FAQ */
+.faq{display:grid;gap:10px}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:0 20px}
+summary{cursor:pointer;padding:16px 0;font-weight:700;list-style:none;display:flex;justify-content:space-between;gap:12px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";color:var(--accent);font-size:1.3rem;line-height:1}
+details[open] summary::after{content:"−"}
+details p{padding-bottom:18px;color:var(--muted);font-size:.94rem}
+code{font-family:var(--f-mono);font-size:.86em;background:var(--sunk);padding:1px 6px;border-radius:5px;overflow-wrap:anywhere}
+
+/* 다운로드 */
+.dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.dl a{display:grid;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:24px;text-decoration:none;color:var(--ink);transition:border-color .15s, transform .15s;min-width:0}
+.dl a:hover{border-color:var(--accent);transform:translateY(-2px)}
+.dl .for{font-size:.78rem;font-weight:700;letter-spacing:.08em;color:var(--accent)}
+.dl .file{font-family:var(--f-mono);font-size:.84rem;color:var(--muted);overflow-wrap:anywhere}
+.dl p{font-size:.9rem;color:var(--muted)}
+.dl .go{font-weight:700;color:var(--accent);margin-top:6px}
+.dl a.main{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.dl a.main .for,.dl a.main .go{color:var(--chalk)}
+.dl a.main .file,.dl a.main p{color:inherit;opacity:.75}
+
+footer{padding-block:40px 56px;border-top:1px solid var(--line);color:var(--muted);font-size:.85rem;display:grid;gap:6px}
+
+@media (max-width:900px){
+  .hero,.ai-grid{grid-template-columns:minmax(0,1fr)}
+  .flow{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .features,.dl{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .specs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .specs div:nth-child(3){border-left:0}
+  .specs div:nth-child(n+3){border-top:1px solid var(--line)}
+}
+@media (max-width:560px){
+  body{padding-inline:16px}
+  section{padding-block:52px}
+  .flow,.features,.dl,.trust{grid-template-columns:minmax(0,1fr)}
+  .grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .grid .tile:nth-child(n+10){display:none}
+  .top nav{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>학생 화면 실시간 모니터</div>
+    <nav aria-label="페이지 안 이동">
+      <a href="#flow">사용 흐름</a><a href="#features">기능</a><a href="#ai">PDF·AI 평가</a><a href="#download">다운로드</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <div>
+      <p class="eyebrow">노트북·태블릿 수업을 위한 교실 도구</p>
+      <h1 style="margin-top:14px">우리 반 서른 명의 화면,<br><em>교사 노트북 한 대</em>로 봅니다</h1>
+      <p class="lead">같은 Wi-Fi 안에서 학생 화면을 실시간으로 모아 보고, 도움이 필요한 학생을 바로 찾고, 수업이 끝나면 학생마다 <b>과정이 담긴 PDF 한 권</b>을 남깁니다.</p>
+      <div class="cta">
+        <a class="btn primary" href="#download">무료로 내려받기</a>
+        <a class="btn ghost" href="#ai">PDF로 과정 평가하기 →</a>
+      </div>
+      <div class="price">
+        <div><b>0원</b>구독·결제 없음</div>
+        <div><b>서버비 0원</b>교사 노트북이 곧 서버</div>
+        <div><b>설치 없음</b>node.exe 내장, 압축만 풀기</div>
+      </div>
+    </div>
+
+    <figure class="device" style="margin:0" aria-label="교사 화면 예시: 학생 화면이 격자로 보이고 호출한 학생은 주황 테두리로 표시된다">
+      <div class="bar">
+        <span class="chip code">수업 코드 482917</span>
+        <span class="chip">분수의 나눗셈</span>
+        <span class="chip rec">기록 중 · 30초</span>
+        <span class="spacer"></span>
+        <span class="chip call">✋ 호출 1</span>
+        <span class="chip">교사 화면 2대</span>
+      </div>
+      <div class="grid" id="mockGrid"></div>
+    </figure>
+  </div>
+
+  <dl class="specs" aria-label="제품 사양">
+    <div><dt>학생 기기</dt><dd>Windows PC · Android 8.0+ 태블릿</dd></div>
+    <div><dt>교사 기기</dt><dd>Windows 노트북 1대 (태블릿 추가 가능)</dd></div>
+    <div><dt>네트워크</dt><dd>교실 Wi-Fi만, 인터넷·클라우드 불필요</dd></div>
+    <div><dt>35명 기준 대역폭</dt><dd>약 3 Mbps</dd></div>
+  </dl>
+
+  <section id="flow">
+    <div class="sec-head">
+      <p class="eyebrow">사용 흐름</p>
+      <h2>수업 한 시간은 이렇게 흘러갑니다</h2>
+      <p>계정 만들기도, 서버 임대도 없습니다. 교사 노트북에서 파일 하나를 실행하는 것으로 시작합니다.</p>
+    </div>
+    <ol class="flow">
+      <li><span class="who">교사</span><h3>서버 켜기</h3><p><code>서버시작.bat</code>을 더블클릭하면 교사 화면이 브라우저에 열립니다.</p></li>
+      <li><span class="who">교사</span><h3>수업 시작</h3><p>수업명을 적고 시작하면 6자리 수업 코드가 나옵니다. <b>IP·수업 코드 띄우기</b>로 프로젝터에 크게 보여 줍니다.</p></li>
+      <li><span class="who">학생</span><h3>전송 시작</h3><p>학생 앱에 수업 코드만 넣고 <b>전송 시작</b>. 서버 주소·학번·이름은 앱이 기억합니다.</p></li>
+      <li><span class="who">교사</span><h3>살피고 돕기</h3><p>격자로 전체를 보고, 누르면 확대. 지난 캡처를 넘겨 보고 메시지를 보냅니다.</p></li>
+      <li><span class="who">교사</span><h3>수업 종료</h3><p>종료를 누르면 학생마다 수업 전체가 담긴 PDF 1개가 저장됩니다.</p></li>
+    </ol>
+  </section>
+
+  <section id="features">
+    <div class="sec-head">
+      <p class="eyebrow">기능</p>
+      <h2>교실에서 실제로 필요한 것만 담았습니다</h2>
+    </div>
+    <div class="features">
+      <div class="feat"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><h3>실시간 격자 화면</h3><p>학생 화면이 타일로 모입니다. 칸 크기를 조절하고, 타일을 누르면 고화질로 확대됩니다.</p></div>
+      <div class="feat"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg></span><h3>이전 캡처 넘겨 보기</h3><p>확대 화면에서 <b>이전·다음</b>으로 몇 분 전 화면을 확인합니다. 방향키로도 넘어갑니다.</p></div>
+      <div class="feat"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8a8 8 0 0 0 16 0v-2a2 2 0 0 0-4 0"/></svg></span><h3>✋ 선생님 호출</h3><p>학생이 버튼을 누르면 알림음과 주황 테두리. 이름을 누르면 그 화면이 열리고 손이 내려갑니다.</p></div>
+      <div class="feat"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><h3>메시지 보내기</h3><p>전체 또는 한 명에게 300자 안내. 링크를 넣으면 학생이 눌러서 바로 엽니다. 몇 명이 받았는지도 표시합니다.</p></div>
+      <div class="feat"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 7h2v2H9zM13 7h2v2h-2zM9 11h2v2H9z"/></svg></span><h3>태블릿으로 옮겨 보기 <span class="tag">선택</span></h3><p>노트북은 프로젝터로 쓰고, 모니터링은 태블릿에서. QR 한 번이면 연결되며 QR은 1회용·2분 만료입니다.</p></div>
+      <div class="feat"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></span><h3>새 버전 알림</h3><p>교사 노트북에 더 새 앱이 있으면 학생 앱에 <b>⬆ 새 버전 받기</b>가 뜹니다. 인터넷 없이 교사 노트북에서 받습니다.</p></div>
+      <div class="feat"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M2 9a15 15 0 0 1 20 0"/><circle cx="12" cy="19.5" r="1"/></svg></span><h3>접속 안내 창</h3><p>IP 주소, 수업 코드, Wi-Fi 이름과 비밀번호를 한 창에 크게. 전체 화면으로 띄우면 학생이 보고 따라 합니다.</p></div>
+      <div class="feat"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg></span><h3>학생별 과정 PDF</h3><p>10·20·30초 주기로 캡처해 수업 종료 때 학생당 PDF 1개. 쪽마다 캡처 시각이 찍힙니다.</p></div>
+      <div class="feat"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6M11 8v6"/></svg></span><h3>AI 분석용 고화질</h3><p>저장할 때마다 학생 기기 원본 화면을 긴 변 최대 2560px로 따로 찍어, 글씨와 수식까지 읽히게 저장합니다.</p></div>
+    </div>
+  </section>
+
+  <section id="ai" class="ai">
+    <div class="sec-head">
+      <p class="eyebrow">수업이 끝난 뒤</p>
+      <h2>PDF를 Gemini Notebook에 넣으면,<br>학생의 풀이 과정이 평가 자료가 됩니다</h2>
+      <p>결과물 한 장이 아니라 학생이 어디서 멈추고, 무엇을 지우고, 어떻게 고쳐 나갔는지가 시각과 함께 남습니다. 이 PDF를 제미나이 노트북(Gemini Notebook)의 소스로 올리면 과정중심평가의 근거를 찾고 정리하는 일을 AI와 함께 할 수 있습니다.</p>
+    </div>
+
+    <div class="ai-grid">
+      <div>
+        <div class="stack">
+          <div class="pdfpage">
+            <span class="pg">p.14 / 96</span>
+            <div class="shot">
+              <svg viewBox="0 0 320 200" aria-label="학생 화면 캡처 예시: 분수 나눗셈 풀이">
+                <rect width="320" height="200" fill="#F7F7F2"/>
+                <rect width="320" height="22" fill="#DCE5E2"/>
+                <circle cx="12" cy="11" r="4" fill="#E07A1F"/><rect x="24" y="7" width="70" height="8" rx="2" fill="#A9B8B3"/>
+                <text x="18" y="50" font-family="Noto Sans KR, sans-serif" font-size="14" fill="#1A1A1A">3/4 ÷ 2/5 = ?</text>
+                <text x="18" y="80" font-family="Noto Sans KR, sans-serif" font-size="13" fill="#1A1A1A">= 3/4 × 5/2</text>
+                <line x1="18" y1="100" x2="120" y2="100" stroke="#D2393C" stroke-width="2"/>
+                <text x="18" y="97" font-family="Noto Sans KR, sans-serif" font-size="13" fill="#9A9A9A">= 8/15</text>
+                <text x="18" y="126" font-family="Noto Sans KR, sans-serif" font-size="13" fill="#1A1A1A">= 15/8</text>
+                <text x="18" y="152" font-family="Noto Sans KR, sans-serif" font-size="11" fill="#0E6B5C">나누는 수를 뒤집어서 곱한다!</text>
+                <rect x="190" y="38" width="112" height="112" rx="4" fill="#fff" stroke="#CFD9D5"/>
+                <g fill="#9FD8C8" stroke="#0E6B5C" stroke-width=".8">
+                  <rect x="198" y="46" width="24" height="96"/><rect x="222" y="46" width="24" height="96"/><rect x="246" y="46" width="24" height="96"/>
+                </g>
+                <rect x="270" y="46" width="24" height="96" fill="none" stroke="#0E6B5C" stroke-width=".8"/>
+              </svg>
+            </div>
+            <p class="stamp">2026-09-24 09:42:30</p>
+          </div>
+        </div>
+
+        <div class="fname" aria-label="PDF 파일 이름 구조">
+          <span><b>분수의_나눗셈</b><small>수업명</small></span>_<span><b>1학년2반</b><small>학급</small></span>_<span><b>2026-09-24_093000</b><small>시작 시각</small></span>_<span><b>…</b><small>구간</small></span>_<span><b>10207_김민수</b><small>학번·이름</small></span>_<span><b>AI고화질.pdf</b><small>화질</small></span>
+        </div>
+      </div>
+
+      <div>
+        <ol class="ai-steps">
+          <li><div><h3>수업 종료 후 PDF 모으기</h3><p><code style="background:rgba(0,0,0,.2);color:inherit">captures/날짜/수업코드/</code> 폴더에 학생별 PDF가 생깁니다. 파일 이름에 수업명·학급·학번·이름이 들어 있어 따로 정리할 필요가 없습니다.</p></div></li>
+          <li><div><h3>Gemini Notebook에 소스로 올리기</h3><p>한 학생의 여러 차시를 모으면 성장 과정을, 한 차시의 여러 학생을 모으면 학급 전체의 흐름을 볼 수 있습니다. 같은 수업에는 같은 수업명을 쓰면 찾기 쉽습니다.</p></div></li>
+          <li><div><h3>평가 기준과 함께 질문하기</h3><p>루브릭이나 성취기준을 함께 소스로 넣고 질문하면, AI가 답과 함께 근거가 된 PDF 쪽을 가리킵니다. 쪽마다 찍힌 캡처 시각으로 그 순간을 바로 확인합니다.</p></div></li>
+        </ol>
+
+        <div class="prompts">
+          <h3>이렇게 물어볼 수 있습니다</h3>
+          <div class="prompt"><i>과정 요약</i><span>김민수 학생이 분수 나눗셈 문제를 푼 과정을 시간 순서로 정리하고, 처음 틀린 지점과 고친 시각을 알려 줘.</span></div>
+          <div class="prompt"><i>오개념 찾기</i><span>2반 학생들의 PDF에서 "나누는 수를 뒤집지 않고 곱한" 풀이가 나온 학생과 쪽을 찾아 줘.</span></div>
+          <div class="prompt"><i>루브릭 채점</i><span>첨부한 과정중심평가 기준표의 각 항목에 대해 이 학생의 수준을 판단하고, 근거 장면을 쪽 번호로 들어 줘.</span></div>
+          <div class="prompt"><i>세특 초안</i><span>세 차시 PDF를 바탕으로 이 학생의 탐구 태도와 성장 과정을 관찰 사실 중심으로 서술해 줘.</span></div>
+        </div>
+
+        <div class="ai-note">
+          <p>AI의 정리는 교사의 판단을 돕는 초안입니다. 최종 평가는 PDF 원본을 확인해 교사가 결정합니다.</p>
+          <p>PDF에는 학생 이름과 화면이 들어 있습니다. 외부 AI 서비스에 올리기 전에 학교의 개인정보 처리 지침과 학생·보호자 동의 범위를 확인하세요.</p>
+          <p>파일 이름과 PDF 속성(제목·키워드)은 자료를 알아보기 쉽게 하려는 것이며, Gemini Notebook의 자동 라벨이 원하는 대로 붙는 것을 보장하지는 않습니다.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="trust">
+    <div class="sec-head">
+      <p class="eyebrow">학생을 존중하는 설계</p>
+      <h2>몰래 보지 않습니다</h2>
+      <p>모니터링은 학생이 알고 동의한 상태에서만 이루어지도록 만들었습니다.</p>
+    </div>
+    <div class="trust">
+      <ul>
+        <li><span class="dot" aria-hidden="true"></span><div><h3>시작과 중지는 학생이</h3><p>학생이 직접 <b>전송 시작</b>을 눌러야 화면이 나갑니다. 자동 실행이나 몰래 설치는 없습니다.</p></div></li>
+        <li><span class="dot" aria-hidden="true"></span><div><h3>보이는 표시</h3><p>창을 숨겨도 트레이 아이콘이 전송 중이면 초록, 대기 중이면 회색. 기록 중일 때는 학생 앱에도 따로 표시됩니다.</p></div></li>
+      </ul>
+      <ul>
+        <li><span class="dot" aria-hidden="true"></span><div><h3>우리 교실 안에서만</h3><p>화면은 교사 노트북으로만 모이고 외부 서버를 거치지 않습니다. 저장한 PDF도 교사 노트북에만 남습니다.</p></div></li>
+        <li><span class="dot" aria-hidden="true"></span><div><h3>교사 인증</h3><p>교사 화면은 비밀번호로 들어가며, 같은 기기에서 10번 틀리면 5분간 잠깁니다.</p></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="ready">
+    <div class="sec-head">
+      <p class="eyebrow">시작 전에 확인하세요</p>
+      <h2>준비물과 자주 묻는 질문</h2>
+    </div>
+    <div class="faq">
+      <details open><summary>처음 한 번 해야 하는 일이 있나요?</summary><p>교사 노트북 방화벽에서 TCP 8080 인바운드를 허용해야 학생이 접속할 수 있습니다. 관리자 권한이 필요하므로 학교 정보부에 요청하면 됩니다. 그리고 <code>서버시작.bat</code>의 기본 비밀번호 <code>teacher1234</code>를 꼭 바꾸세요.</p></details>
+      <details><summary>학생 앱을 실행하면 경고가 떠요.</summary><p>코드 서명이 없는 프로그램이라 Windows SmartScreen이나 백신이 경고할 수 있습니다. <b>추가 정보 → 실행</b>으로 진행합니다. Android는 처음 한 번 '이 출처 허용'이 필요합니다.</p></details>
+      <details><summary>옆 반 Wi-Fi에 붙은 학생도 접속되나요?</summary><p>교사 노트북과 같은 네트워크에 있어야 합니다. 학교망 구성에 따라 다른 교실 AP에서는 접속되지 않을 수 있으니, 학생 기기를 교사와 같은 Wi-Fi에 연결하세요. 접속 안내 창에 Wi-Fi 이름과 비밀번호가 함께 나옵니다.</p></details>
+      <details><summary>iPad나 크롬북도 되나요?</summary><p>현재는 Windows PC와 Android 태블릿(8.0 이상)만 지원합니다. 갤럭시탭 S6 Lite·S5e(Android 13)에서 확인했습니다.</p></details>
+      <details><summary>PDF가 저장되지 않은 채 끝날 수도 있나요?</summary><p>캡처는 수업 종료 전까지 교사 노트북 메모리에 있습니다. 반드시 교사 화면에서 <b>수업 종료</b>를 누르고 "PDF N개 저장 완료"를 본 뒤 서버 창을 닫으세요. 수업 중 노트북이 절전되지 않게 해 두는 것이 좋습니다.</p></details>
+      <details><summary>한 수업에 얼마나 저장되나요?</summary><p>10초 주기면 학생 한 명당 1시간에 약 360장, 30초 주기면 약 120장입니다. 같은 화면이 이어지면 중복 쪽은 만들지 않습니다.</p></details>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="sec-head">
+      <p class="eyebrow">다운로드</p>
+      <h2>필요한 파일은 세 개입니다</h2>
+      <p>링크는 항상 최신 버전을 받습니다. 학생 앱은 교사 노트북의 <code>/student</code> 설치 페이지에서도 받을 수 있습니다.</p>
+    </div>
+    <div class="dl">
+      <a class="main" href="https://github.com/j33333376-ops/screen-monitor/releases/latest/download/screen-monitor-teacher.zip">
+        <span class="for">교사 노트북</span><span class="file">screen-monitor-teacher.zip</span>
+        <p>서버(node.exe 포함)와 학생 설치 페이지용 앱. 압축을 풀고 <code style="background:transparent;padding:0;color:inherit">server/서버시작.bat</code> 실행.</p><span class="go">내려받기 ↓</span>
+      </a>
+      <a href="https://github.com/j33333376-ops/screen-monitor/releases/latest/download/screen-monitor-student.exe">
+        <span class="for">학생 Windows</span><span class="file">screen-monitor-student.exe</span>
+        <p>파일 하나로 실행. Python 설치 불필요.</p><span class="go">내려받기 ↓</span>
+      </a>
+      <a href="https://github.com/j33333376-ops/screen-monitor/releases/latest/download/screen-monitor-student.apk">
+        <span class="for">학생 Android</span><span class="file">screen-monitor-student.apk</span>
+        <p>Android 8.0 이상 태블릿.</p><span class="go">내려받기 ↓</span>
+      </a>
+    </div>
+    <p style="margin-top:18px;font-size:.9rem;color:var(--muted)">자세한 사용 설명과 변경 내역은 <a href="https://github.com/j33333376-ops/screen-monitor">GitHub 저장소의 README</a>에 있습니다.</p>
+  </section>
+
+  <footer>
+    <p>학생 화면 실시간 모니터 · 학교 내부망용 시제품 · 학생 앱 1.5.0 (2026-09-28)</p>
+    <p>교사 공용 비밀번호와 수업 코드 방식이며 통신은 암호화되지 않습니다. 인터넷에 포트를 직접 공개하지 마세요. 화면 기록의 보관·파기 기준은 학교 운영에 맞춰 정하세요.</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  // 교사 화면 목업: 학생 타일 12개 (예시 이름)
+  var S=[
+    ["10201","강서윤","graph"],["10202","김도현","text"],["10203","박지우","frac",1],["10204","이하준","shape"],
+    ["10205","정민서","text"],["10206","최예준","graph",0,1],["10207","김민수","frac"],["10208","한소율","shape"],
+    ["10209","윤지호","graph"],["10210","오채원","text",0,0,1],["10211","송유진","shape"],["10212","임준서","frac"]
+  ];
+  function art(k,i){
+    var h=(i*37)%60;
+    if(k==="graph") return '<svg viewBox="0 0 160 105"><rect width="160" height="105" fill="#F4F6F5"/><rect width="160" height="12" fill="#D6E0DD"/><path d="M14 90H150M14 90V20" stroke="#9AA9A4" stroke-width="1"/><polyline fill="none" stroke="#0E6B5C" stroke-width="2" points="14,86 40,'+(70-h/3)+' 66,'+(60-h/4)+' 92,48 118,'+(34+h/5)+' 146,24"/></svg>';
+    if(k==="frac") return '<svg viewBox="0 0 160 105"><rect width="160" height="105" fill="#FBFBF7"/><rect width="160" height="12" fill="#E3DDD0"/><rect x="12" y="24" width="60" height="6" rx="2" fill="#333"/><rect x="12" y="40" width="80" height="6" rx="2" fill="#555"/><rect x="12" y="56" width="'+(40+h)+'" height="6" rx="2" fill="#777"/><g fill="#9FD8C8" stroke="#0E6B5C" stroke-width=".6"><rect x="104" y="24" width="12" height="60"/><rect x="116" y="24" width="12" height="60"/><rect x="128" y="24" width="12" height="60"/></g><rect x="140" y="24" width="12" height="60" fill="none" stroke="#0E6B5C" stroke-width=".6"/></svg>';
+    if(k==="shape") return '<svg viewBox="0 0 160 105"><rect width="160" height="105" fill="#EEF2F7"/><rect width="160" height="12" fill="#C9D3E0"/><polygon points="40,90 '+(80+h/3)+',24 124,90" fill="#CFE0F5" stroke="#2B5C9E" stroke-width="1.5"/><circle cx="'+(80+h/3)+'" cy="24" r="3" fill="#E07A1F"/></svg>';
+    return '<svg viewBox="0 0 160 105"><rect width="160" height="105" fill="#FFFFFF"/><rect width="160" height="12" fill="#DDE3E1"/><rect x="14" y="22" width="90" height="7" rx="2" fill="#2E3A37"/><rect x="14" y="38" width="130" height="4" rx="2" fill="#B8C2BF"/><rect x="14" y="48" width="120" height="4" rx="2" fill="#B8C2BF"/><rect x="14" y="58" width="'+(70+h)+'" height="4" rx="2" fill="#B8C2BF"/><rect x="14" y="74" width="50" height="14" rx="3" fill="#0E6B5C"/></svg>';
+  }
+  var g=document.getElementById("mockGrid"),html="";
+  S.forEach(function(s,i){
+    var cls="tile"+(s[3]?" called":"")+(s[4]?" old":"")+(s[5]?" off":"");
+    var flag=s[3]?'<span class="flag">✋ 호출</span>':s[4]?'<span class="flag">⬆ 앱 업데이트</span>':s[5]?'<span class="flag" style="background:#555">연결 끊김</span>':"";
+    html+='<div class="'+cls+'">'+art(s[2],i)+flag+'<div class="lab"><span>'+s[0]+'</span><span>'+s[1]+'</span></div></div>';
+  });
+  g.innerHTML=html;
+})();
+</script>
+</body>
+</html>
